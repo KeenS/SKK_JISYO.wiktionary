@@ -19,6 +19,12 @@ fn main() {
     let wiki = from_reader::<_, Mediawiki>(BufReader::new(xml)).expect("failed to decode xml");
     let mut buffer = BufWriter::new(output);
 
+    writeln!(
+        buffer,
+        "; この辞書はWikitonary[^1]を元に生成されておりCC BY-SA 3.0[^2]の下提供されます\n; [^1]: https://ja.wiktionary.org/\n; [^2]: https://creativecommons.org/licenses/by-sa/3.0/deed.ja"
+    )
+    .expect("failed to write header");
+
     let ids = BufReader::new(ids)
         .lines()
         .map(|l| l.expect("line error").parse::<u64>().expect("parse error"))
