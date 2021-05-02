@@ -3,6 +3,7 @@ use regex::Regex;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
+use wana_kana::to_hiragana::to_hiragana;
 use xml_xtract::{kanji_articles, model::*};
 
 static EXTRACT_REGEX: OnceCell<Regex> = OnceCell::new();
@@ -17,8 +18,8 @@ fn extract_on(mut buffer: impl Write, area: &str, page: &Page) -> io::Result<()>
         at_least_one = true;
         let gen = cap.get(1).unwrap().as_str();
         let sei = cap.get(2).unwrap().as_str();
-        writeln!(buffer, "{} /{}/", sei, page.title)?;
-        writeln!(buffer, "{} /{};{}/", gen, page.title, sei)?;
+        writeln!(buffer, "{} /{}/", to_hiragana(sei), page.title)?;
+        writeln!(buffer, "{} /{};{}/", to_hiragana(gen), page.title, sei)?;
     }
 
     if !at_least_one {
