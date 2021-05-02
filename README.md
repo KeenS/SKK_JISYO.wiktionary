@@ -1,3 +1,10 @@
+# SKKのWikitonary辞書
+
+このリポジトリは日本語版Wikitonaryから生成したいくつかの辞書が含まれています。
+
+* SKK_JISYO.shikakugoma: 四角号碼の辞書です
+* SKK_JISYO.seikana: (experimental) 歴史的仮名遣い（正假名）の辞書です
+
 # SKKの四角号碼辞書
 ## これは何？
 
@@ -36,12 +43,42 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 
 1つの辞書しか扱えないSKKエンジンを使っている場合は[skkdic-expr2](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=%BC%AD%BD%F1%A5%E1%A5%F3%A5%C6%A5%CA%A5%F3%A5%B9%A5%C4%A1%BC%A5%EB)などで1つにまとめて下さい。
 
-## ライセンス
+# SKKの歴史的仮名遣い辞書
+## これは何？
+
+漢字を歴史的仮名遣いで変換するための（実験的な）辞書です。また、[アノテーション](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=annotation)も含みます。歴史的仮名遣いを普段から使っている人は正假名と呼んでいるようです。こっちの方が短いので以後こっちで説明します。
+
+## 正假名入力について
+
+漢字の音読みには同音なものが多く、例えば「しょう」だとSKK_JISYO.Lには174のエントリがあります。この中から「笑」を探すのは四葉のクローバーを探すくらい難しいですよね。でも「笑」の正假名「せう」だと候補は57に絞られます。同様に「渉」も「しょう」ですが正假名の「せふ」で変換すると候補は24に減ります。
+
+正假名は1つ1つ覚えないといけないので使いはじめるのはちょっと大変です。そこで現代仮名遣いの候補のアノテーションに正假名の読みも付与しました。辞書には以下のようなエントリが含まれています。
+
+```
+せう /笑/
+しょう /笑;セウ/
+せふ /渉/
+しょう /渉;セフ/
+```
+
+アノテーションをサポートしている辞書なら変換候補内に表示してくれます。
+
+## 使い方
+
+普通のSKK辞書のように使えます。アノテーションをサポートしていないエンジンで問題が発生する場合は[unannotation.awk](http://openlab.jp/skk/skk/tools/unannotation.awk)などを利用して削除して下さい
+
+## experimental版の制限事項
+
+Wiktionaryの漢字のページから生成しているので単一の漢字にのみ対応しています。熟語には対応していません。例えば「高笑」は正假名で「かうせう」ですが「かうせう」では変換できず、「かう」「せう」とそれぞれ変換しないといけません。
+
+将来的には熟語に対応したいと考えていますが、ソースとなる情報源がなく、既存の辞書を泥臭く変換していく作業になりそうなので予定は未定です。
+
+# ライセンス
 
 * 辞書はWiktionaryのライセンスに従い[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/deed.ja)で提供されます。
 * その他のコード類はMITライセンスです。
 
-## 自分で生成する
+# 自分で生成する
 
 自分でデータを生成する人のために手順を示す。
 
@@ -80,17 +117,20 @@ $ docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl
 `cargo run` する。
 
 ```console
+# 四角号碼辞書
 $ cargo run --release --bin shikakugoma ids.txt jawiktionary-*-pages-articles.xml > output.log
+# 正假名辞書辞書
+a$ cargo run --release --bin seikana ids.txt jawiktionary-*-pages-articles.xml > output.log
 ```
 
 カレントディレクトリに辞書ができる。
 
 ```console
-$ ls SKK_JISYO.shikakugoma
-SKK_JISYO.shikakugoma
+$ ls SKK_JISYO.*
+SKK_JISYO.seikana  SKK_JISYO.shikakugoma
 ```
 
-wikitionaryに四角号碼の情報が載ってないものもあるので `output.log` にはそれらの情報が出力されている。
+wikitionaryに適切な情報が載ってないものもあるので `output.log` にはそれらの情報が出力されている。
 
 ```console
 $ head output.log
@@ -110,4 +150,4 @@ $ head output.log
 
 * 手順の自動化
 * 自動更新
-* その他の辞書（歴史的仮名づかいなど）の生成
+* 正假名の熟語対応
