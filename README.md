@@ -118,6 +118,12 @@ sqlite3でできたらよかったが、スキーマの `unsigned` に対応し�
 $ docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_to = 0xE6BCA2E5AD97 ORDER BY cl_from' > ids.txt
 ```
 
+MySQLはもう不要なので落としておく
+
+``` console
+$ dokcer stop wiktionary
+```
+
 ### 辞書生成
 
 `cargo run` する。
