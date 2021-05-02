@@ -1,9 +1,8 @@
-use quick_xml::de::from_reader;
 use regex::Regex;
 use std::env;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
-use xml_xtract::model::*;
+use std::io::{BufWriter, Write};
+use xml_xtract::kanji_articles;
 
 fn main() {
     let line_regex = Regex::new(r"(?:\[\[)?四角号碼(?:\]\])?\s*[:：]\s*(.*)")
@@ -11,12 +10,10 @@ fn main() {
     let number_regex =
         Regex::new(r"(?:(\d{4})(?:\s*<sub>(\d)</sub>)?)").expect("internal error: invalid regex");
 
-    let id_file = env::args().nth(1).expect("Usage: IDs XML");
+    let ids_file = env::args().nth(1).expect("Usage: IDs XML");
     let xml_file = env::args().nth(2).expect("Usage: IDs XML");
-    let ids = File::open(id_file).expect("failed to open file");
-    let xml = File::open(xml_file).expect("failed to read file");
     let output = File::create("SKK_JISYO.shikakugoma").expect("failed to create output file");
-    let wiki = from_reader::<_, Mediawiki>(BufReader::new(xml)).expect("failed to decode xml");
+
     let mut buffer = BufWriter::new(output);
 
     writeln!(
@@ -25,17 +22,7 @@ fn main() {
     )
     .expect("failed to write header");
 
-    let ids = BufReader::new(ids)
-        .lines()
-        .map(|l| l.expect("line error").parse::<u64>().expect("parse error"))
-        .collect::<Vec<_>>();
-
-    let pages = wiki
-        .page
-        .into_iter()
-        .filter(|page| ids.contains(&page.id) && page.title.chars().count() == 1);
-
-    for page in pages {
+    for page in kanji_articles(ids_file, xml_file) {
         match line_regex.captures(&page.revision.text) {
             None => {
                 println!("{}: no match", page.title);
