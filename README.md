@@ -67,12 +67,6 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 
 普通のSKK辞書のように使えます。アノテーションをサポートしていないエンジンで問題が発生する場合は[unannotation.awk](http://openlab.jp/skk/skk/tools/unannotation.awk)などを利用して削除して下さい。
 
-あるいは今のところ1行1エントリなので `;` を含む行を削除してしまっても大丈夫です。
-
-``` console
-$ sed -i '/;/d' SKK_JISYO.seikana
-```
-
 ## experimental版の制限事項
 
 Wiktionaryの漢字のページから生成しているので単一の漢字にのみ対応しています。熟語には対応していません。例えば「高笑」は正假名で「かうせう」ですが「かうせう」では変換できず、「かう」「せう」とそれぞれ変換しないといけません。
@@ -103,7 +97,7 @@ Wiktionaryの漢字のページから生成しているので単一の漢字に�
 
 ```console
 $ docker run --name wiktionary --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
-$ docker exec  -i wiktionary mysql wiktionary < jawiktionary-20210401-categorylinks.sql
+$ docker exec  -i wiktionary mysql wiktionary < jawiktionary-*-categorylinks.sql
 ```
 
 まあまあの時間がかかる。
@@ -121,7 +115,7 @@ $ docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl
 MySQLはもう不要なので落としておく
 
 ``` console
-$ dokcer stop wiktionary
+$ docker stop wiktionary
 ```
 
 ### 辞書生成
@@ -132,7 +126,18 @@ $ dokcer stop wiktionary
 # 四角号碼辞書
 $ cargo run --release --bin shikakugoma ids.txt jawiktionary-*-pages-articles.xml > output.log
 # 正假名辞書辞書
-a$ cargo run --release --bin seikana ids.txt jawiktionary-*-pages-articles.xml > output.log
+$ cargo run --release --bin seikana ids.txt jawiktionary-*-pages-articles.xml > output.log
+```
+
+このデータは正しくソートされていないので `skkdic-sort` を使ってソートする
+
+``` console
+# 四角号碼辞書
+$ cat header.txt > SKK_JISYO.shikakugoma
+$ cat tmp.shikakugoma | skkdic-sort >> SKK_JISYO.shikakugoma
+# 正假名辞書辞書
+$ cat header.txt > SKK_JISYO.seikana
+$ cat tmp.seikana | skkdic-sort >> SKK_JISYO.seikana
 ```
 
 カレントディレクトリに辞書ができる。
@@ -156,6 +161,12 @@ $ head output.log
 続: no match
 総: no match
 鉃: no match
+```
+
+後片付けしておく
+
+``` console
+$ rm tmp.* ids.txt
 ```
 
 # Future Work
