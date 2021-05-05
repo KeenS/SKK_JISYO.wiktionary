@@ -177,6 +177,5 @@ $ rm tmp.* ids.txt
 
 # Future Work
 
-* 手順の自動化
 * 自動更新
 * 正假名の熟語対応
