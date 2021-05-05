@@ -33,6 +33,9 @@ check_dependency() {
 }
 
 check_dependencies() {
+    check_dependency wget
+    check_dependency zcat
+    check_dependency bzcat
     check_dependency docker
     check_dependency cargo
     check_dependency skkdic-sort
