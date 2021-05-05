@@ -12,15 +12,9 @@ fn main() {
 
     let ids_file = env::args().nth(1).expect("Usage: IDs XML");
     let xml_file = env::args().nth(2).expect("Usage: IDs XML");
-    let output = File::create("SKK_JISYO.shikakugoma").expect("failed to create output file");
+    let output = File::create("tmp.shikakugoma").expect("failed to create output file");
 
     let mut buffer = BufWriter::new(output);
-
-    writeln!(
-        buffer,
-        "; この辞書はWikitonary[^1]を元に生成されておりCC BY-SA 3.0[^2]の下提供されます\n; [^1]: https://ja.wiktionary.org/\n; [^2]: https://creativecommons.org/licenses/by-sa/3.0/deed.ja"
-    )
-    .expect("failed to write header");
 
     for page in kanji_articles(ids_file, xml_file) {
         match line_regex.captures(&page.revision.text) {
