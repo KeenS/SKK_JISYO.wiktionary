@@ -1,3 +1,12 @@
 /target
 output_*.log
-data/
+data/*
+!data/.gitkeep
+
+# Local dump-derived build artifacts
+ids.txt
+kanji_readings.tsv
+tmp.*
+wiktionary-jisyo-report.tsv
+seikana-output.log
+shikakugoma-output.log
