@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 pub mod model;
+pub mod seikana;
 
 pub fn kanji_articles(
     ids_file: impl AsRef<Path>,
