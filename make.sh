@@ -82,11 +82,22 @@ generate() {
         echo "Generating prototype of dictionaries"
         cargo run --release --bin shikakugoma ids.txt "$ARTICLES" > output_shikakugoma.log
         cargo run --release --bin seikana ids.txt "$ARTICLES" > output_seikana.log
+        echo "Generating Wiktionary dictionary"
+        cargo run --release --bin wiktionary_jisyo -- \
+            --xml "$ARTICLES" \
+            --mapping kanji_readings.tsv \
+            --exceptions seikana_exceptions.tsv \
+            --output tmp.jawiktionary \
+            --seikana-output tmp.jawiktionary.seikana \
+            --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
         cat header.txt > SKK_JISYO.shikakugoma
         cat tmp.shikakugoma | skkdic-sort >> SKK_JISYO.shikakugoma
+        cat header.txt > SKK_JISYO.jawiktionary
+        cat tmp.jawiktionary | skkdic-sort >> SKK_JISYO.jawiktionary
+        echo "Generating seikana dictionary"
         cat header.txt > SKK_JISYO.seikana
-        cat tmp.seikana | skkdic-sort >> SKK_JISYO.seikana
+        cat tmp.seikana tmp.jawiktionary.seikana | skkdic-sort >> SKK_JISYO.seikana
         echo "Cleaning up"
         rm tmp.* ids.txt
     )
@@ -127,4 +138,3 @@ main() {
 }
 
 main "$@"
-
