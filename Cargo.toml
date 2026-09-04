@@ -2,14 +2,14 @@
 name = "xml-xtract"
 version = "0.1.0"
 authors = ["κeen <3han5chou7@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-once_cell = "1.7.2"
-quick-xml = { version = "0.22.0", features = ["serialize"]}
-regex = "1.4.6"
-serde = { version = "1.0.125", features = ["derive"] }
-wana_kana = "2.0.1"
+once_cell = "1.21"
+quick-xml = { version = "0.42", features = ["serialize"] }
+regex = "1.13"
+serde = { version = "1.0", features = ["derive"] }
+wana_kana = "5.0"
