@@ -72,7 +72,11 @@ generate() {
         echo "Preparing Database"
         docker exec  -i wiktionary mysql wiktionary < "$CATLINK"
         echo "Extracting page ids of kanji articles"
-        docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_to = 0xE6BCA2E5AD97 ORDER BY cl_from' > ids.txt
+        # 漢字 = 0xE6BCA2E5AD97
+        # namespace 14: category
+        # SELECT lt_id FROM linktarget WHERE lt_title = 0xE6BCA2E5AD97 AND lt_namespace = 14;
+        # -> 90955
+        docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_target_id = 90955 ORDER BY cl_from' > ids.txt
         echo "Stopping MySQL"
         docker stop wiktionary
         echo "Generating prototype of dictionaries"
@@ -110,12 +114,16 @@ main() {
         esac
     done
 
-    CATLINK="$1"
-    ARTICLES="$2"
-
-    if fetch_data; then
-        generate
+    if [ $# = 2 ]; then
+        CATLINK="$1"
+        ARTICLES="$2"
+    else
+        fetch_data || exit 1
+        CATLINK=data/jawiktionary-latest-categorylinks.sql
+        ARTICLES=data/jawiktionary-latest-pages-articles.xml
     fi
+    generate
+
 }
 
 main "$@"

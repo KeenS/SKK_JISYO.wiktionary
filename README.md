@@ -80,11 +80,18 @@ Wiktionaryの漢字のページから生成しているので単一の漢字に�
 
 # 自分で生成する
 
-自分でデータを生成する人のために手順を示す。簡単には以下のコマンドでできる。
+自分でデータを生成する人のために手順を示す。簡単には以下のコマンドでwiktionaryからデータをダウンロードし、辞書の生成までできる。
 
 ``` console
 $ ./make.sh
 ```
+
+既にデータをダウンロードしてあるならそれを使うこともできる。
+
+``` console
+$ ./make.sh path/to/jawiktionary-latest-categorylinks.sql path/to/jawiktionary-latest-pages-articles.xml
+```
+
 
 `make.sh` を使わずに生成する場合は以下の手順を踏む。
 
@@ -95,7 +102,7 @@ $ ./make.sh
 * `jawiktionary-*-categorylinks.sql`
 * `jawiktionary-*-pages-articles.xml`
 
-ダウンロードしたらgzやbz2を解答しておく。
+ダウンロードしたらgzやbz2を解凍しておく。
 
 ### MySQLのセットアップ
 
@@ -108,7 +115,7 @@ $ docker exec  -i wiktionary mysql wiktionary < jawiktionary-*-categorylinks.sql
 
 まあまあの時間がかかる。
 
-sqlite3でできたらよかったが、スキーマの `unsigned` に対応していないので無理そうだった。
+sqlite3でできたら手軽でよかったが、スキーマの `unsigned` に対応していないので無理そうだった。
 
 ### 漢字記事IDの取得
 
