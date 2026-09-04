@@ -6,6 +6,13 @@ use std::path::Path;
 pub mod model;
 pub mod seikana;
 
+pub fn articles(xml_file: impl AsRef<Path>) -> impl Iterator<Item = model::Page> {
+    let xml = File::open(xml_file).expect("failed to read file");
+    let wiki =
+        from_reader::<_, model::Mediawiki>(BufReader::new(xml)).expect("failed to decode xml");
+    wiki.page.into_iter()
+}
+
 pub fn kanji_articles(
     ids_file: impl AsRef<Path>,
     xml_file: impl AsRef<Path>,
@@ -16,7 +23,12 @@ pub fn kanji_articles(
         from_reader::<_, model::Mediawiki>(BufReader::new(xml)).expect("failed to decode xml");
     let ids = BufReader::new(ids)
         .lines()
-        .map(|l| l.expect("line error").parse::<u64>().expect("parse error"))
+        .map(|line| {
+            line.expect("line error")
+                .trim()
+                .parse::<u64>()
+                .expect("parse error")
+        })
         .collect::<Vec<_>>();
 
     wiki.page

@@ -79,7 +79,7 @@ pub fn convert(
     let mut source = normalize_historical(reading);
     for (index, segment) in segments.iter().enumerate() {
         let Some((rendered, rest, compressed)) =
-            render_segment(&source, &segment.modern, &segment.historical)
+            render_segment(&source, &segment.modern, &segment.historical, None)
         else {
             return Err(RuleError::UnrestorableSokuon);
         };
@@ -103,17 +103,36 @@ pub fn convert(
     })
 }
 
-fn render_segment<'a>(
+pub(crate) fn render_segment<'a>(
     source: &'a str,
     modern: &str,
     historical: &str,
+    actual: Option<&str>,
 ) -> Option<(String, &'a str, bool)> {
     let modern = &normalize_historical(modern);
+    let actual = actual.map(normalize_historical).unwrap_or_default();
     let historical = &normalize_historical(historical);
-    if let Some(consumed) = source.strip_prefix(modern.as_str()) {
-        return Some((historical.to_string(), consumed, false));
+    let actual = if actual.is_empty() {
+        modern.clone()
+    } else {
+        actual
+    };
+    if actual.as_str() != modern.as_str() {
+        let rest = source.strip_prefix(actual.as_str())?;
+        return Some((normalize_historical(actual.as_str()), rest, false));
     }
-
+    if let Some(consumed) = source.strip_prefix(actual.as_str()) {
+        let historical = if actual.ends_with('っ') {
+            let historical_head = historical
+                .chars()
+                .take(historical.chars().count().saturating_sub(1))
+                .collect::<String>();
+            format!("{historical_head}っ")
+        } else {
+            historical.to_string()
+        };
+        return Some((historical, consumed, false));
+    }
     let modern_chars = modern.chars().collect::<Vec<_>>();
     if modern_chars.is_empty() {
         return None;

@@ -115,6 +115,11 @@ fn main() -> io::Result<()> {
                     let mut parts = pair.split('<');
                     let modern = parts.next().unwrap_or("").trim();
                     let historical = parts.next().unwrap_or("").trim();
+                    let historical = if historical.is_empty() {
+                        modern
+                    } else {
+                        historical
+                    };
                     if is_on_reading(modern) && is_on_reading(historical) {
                         let mapping = Mapping {
                             kanji: page.title.clone(),
@@ -148,6 +153,11 @@ fn main() -> io::Result<()> {
                     let mut parts = pair.split('<');
                     let modern = parts.next().unwrap_or("").trim();
                     let historical = parts.next().unwrap_or("").trim();
+                    let historical = if historical.is_empty() {
+                        modern
+                    } else {
+                        historical
+                    };
                     if is_on_reading(modern) {
                         let modern = modern.to_hiragana();
                         if !modern_readings.contains(&modern) {

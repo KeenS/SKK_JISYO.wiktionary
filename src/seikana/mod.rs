@@ -3,5 +3,7 @@ pub mod exception;
 pub mod jisyo;
 pub mod jukugo;
 pub mod mapping;
+pub mod okuri;
 pub mod rules;
 pub mod segmentation;
+pub mod wiktionary;
