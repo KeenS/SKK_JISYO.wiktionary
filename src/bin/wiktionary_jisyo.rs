@@ -33,7 +33,6 @@ mod tests {
             exceptions: Some("exceptions.tsv".into()),
             report: Some("report.tsv".into()),
             source: Source::Kanji,
-            seikana_output: None,
             dry_run: true,
         };
         assert_eq!(options.source, Source::Kanji);
@@ -82,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn creates_seikana_entries_from_kanji_pages() {
+    fn converts_kanji_pages() {
         let page = parse_japanese_page(
             "学校",
             "=={{ja}}==\n{{ja-kanjitab|がく|こう}}\n{{ja-noun|がっこう}}",
@@ -99,9 +98,8 @@ mod tests {
                 historical: "かう".into(),
             },
         ];
-        let (_, converted, seikana) = page_entries(&page, &mappings, Source::All);
+        let (_, converted) = page_entries(&page, &mappings, Source::All);
         assert_eq!(converted, vec![Entry::new("がくかう", "学校")]);
-        assert_eq!(seikana, converted);
     }
 }
 
@@ -131,7 +129,6 @@ struct Options {
     exceptions: Option<PathBuf>,
     report: Option<PathBuf>,
     source: Source,
-    seikana_output: Option<PathBuf>,
     dry_run: bool,
 }
 
@@ -190,7 +187,7 @@ fn usage(code: ExitCode) -> ExitCode {
     eprintln!(
         "Usage: wiktionary_jisyo --xml XML --mapping MAPPING --output OUTPUT \
          [--exceptions EXCEPTIONS] [--report REPORT] [--source all|kanji|wago] \
-         [--seikana-output OUTPUT] [--dry-run]"
+         [--dry-run]"
     );
     code
 }
@@ -200,15 +197,10 @@ fn parse_args() -> Result<Options, ExitCode> {
     let mut values = HashMap::new();
     let mut source = Source::All;
     let mut dry_run = false;
-    let mut seikana_output = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--dry-run" => dry_run = true,
-            "--seikana-output" => {
-                let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
-                seikana_output = Some(PathBuf::from(value));
-            }
             "--source" => {
                 let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
                 source = Source::from_name(&value).ok_or_else(|| usage(ExitCode::FAILURE))?;
@@ -235,7 +227,6 @@ fn parse_args() -> Result<Options, ExitCode> {
         exceptions: values.get("--exceptions").map(PathBuf::from),
         report: values.get("--report").map(PathBuf::from),
         source,
-        seikana_output,
         dry_run,
     })
 }
@@ -255,9 +246,8 @@ fn page_entries(
     page: &JapanesePage,
     mappings: &[Mapping],
     source: Source,
-) -> (Vec<WiktionaryEntry>, Vec<Entry>, Vec<Entry>) {
+) -> (Vec<WiktionaryEntry>, Vec<Entry>) {
     let mut words = Vec::new();
-    let mut seikana_entries = Vec::new();
     if source != Source::Wago {
         for entry in kanji_word_entries(page, mappings).0 {
             words.push(WiktionaryEntry {
@@ -265,14 +255,13 @@ fn page_entries(
                 candidate: entry.candidates.join("/"),
                 source: EntrySource::KanjiWord,
             });
-            seikana_entries.push(entry);
         }
     }
     if source != Source::Kanji {
         words.extend(wiktionary_entries(page));
     }
     let entries = words.iter().map(to_entry).collect();
-    (words, entries, seikana_entries)
+    (words, entries)
 }
 
 fn main() -> ExitCode {
@@ -292,7 +281,6 @@ fn run(options: Options) -> io::Result<()> {
     let mappings = read_mapping(&options.mapping)?;
     let exceptions = read_exceptions(&options.exceptions)?;
     let mut output_entries = Vec::new();
-    let mut seikana_output_entries = Vec::new();
     let mut report = Report::default();
 
     for page in articles(&options.xml) {
@@ -304,17 +292,7 @@ fn run(options: Options) -> io::Result<()> {
         let page = parse_japanese_page(page.title.as_str(), text);
         report.kanjitabs += page.kanjitabs.len();
         report.noun_readings += page.noun_readings.len();
-        let (entries, converted, page_seikana_entries) =
-            page_entries(&page, &mappings, options.source);
-        let page_seikana_entries = page_seikana_entries
-            .into_iter()
-            .filter(|entry| {
-                !exceptions
-                    .iter()
-                    .any(|exception| exception_matches(exception, &page, &entry.reading))
-            })
-            .collect::<Vec<_>>();
-        seikana_output_entries.extend(page_seikana_entries);
+        let (entries, converted) = page_entries(&page, &mappings, options.source);
         for entry in converted {
             if exceptions
                 .iter()
@@ -345,22 +323,8 @@ fn run(options: Options) -> io::Result<()> {
     output_entries.dedup();
     report.entries = output_entries.len();
     let dictionary = Dictionary::from_entries(&output_entries);
-    seikana_output_entries.sort_by(|left, right| {
-        left.reading
-            .cmp(&right.reading)
-            .then_with(|| left.candidates.join("/").cmp(&right.candidates.join("/")))
-    });
-    seikana_output_entries.dedup();
-
     if !options.dry_run {
         dictionary.write_to(&options.output)?;
-    }
-
-    if !options.dry_run {
-        if let Some(path) = options.seikana_output {
-            let dictionary = Dictionary::from_entries(&seikana_output_entries);
-            dictionary.write_to(&path)?;
-        }
     }
 
     if let Some(report_path) = options.report {
