@@ -1,0 +1,43 @@
+<mediawiki>
+  <page>
+    <title>学校</title>
+    <ns>0</ns>
+    <id>1</id>
+    <revision>
+      <id>1</id>
+      <text>=={{ja}}==
+{{ja-kanjitab|がく|こう}}
+{{ja-noun|がっこう}}</text>
+    </revision>
+  </page>
+  <page>
+    <title>歩く</title>
+    <ns>0</ns>
+    <id>2</id>
+    <revision>
+      <id>2</id>
+      <text>=={{L|ja}}==
+{{ja-wagokanji|あるく}}</text>
+    </revision>
+  </page>
+  <page>
+    <title>移動</title>
+    <ns>0</ns>
+    <id>3</id>
+    <revision>
+      <id>3</id>
+      <text>== {{ja}} ==
+{{ja-verb-suru|いどう}}</text>
+    </revision>
+  </page>
+  <page>
+    <title>English</title>
+    <ns>0</ns>
+    <id>4</id>
+    <revision>
+      <id>4</id>
+      <text>=={{en}}==
+Not Japanese.</text>
+    </revision>
+  </page>
+</mediawiki>
