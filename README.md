@@ -1,5 +1,5 @@
 # SKKのWiktionary辞書
-このリポジトリは日本語版Wikitonaryから生成したいくつかの辞書が含まれています。
+このリポジトリは日本語版Wiktionaryから生成したいくつかの辞書が含まれています。
 
 * SKK-JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
 * SKK-JISYO.shikakugoma: 四角号碼の変換辞書です
