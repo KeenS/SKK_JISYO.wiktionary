@@ -3,6 +3,7 @@ pub mod exception;
 pub mod jisyo;
 pub mod jukugo;
 pub mod mapping;
+pub mod on_reading;
 pub mod rules;
 pub mod segmentation;
 pub mod wiktionary;
