@@ -90,13 +90,13 @@ generate() {
             --jion-output tmp.wiktionary.jion \
             --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
-        cat header.txt > SKK_JISYO.shikakugoma
-        cat tmp.shikakugoma | skkdic-sort >> SKK_JISYO.shikakugoma
-        cat header.txt > SKK_JISYO.wiktionary
-        cat tmp.wiktionary | skkdic-sort >> SKK_JISYO.wiktionary
+        cat header.txt > SKK-JISYO.shikakugoma
+        cat tmp.shikakugoma | skkdic-sort >> SKK-JISYO.shikakugoma
+        cat header.txt > SKK-JISYO.wiktionary
+        cat tmp.wiktionary | skkdic-sort >> SKK-JISYO.wiktionary
         echo "Generating jion dictionary"
-        cat header.txt > SKK_JISYO.jion
-        cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK_JISYO.jion
+        cat header.txt > SKK-JISYO.jion
+        cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK-JISYO.jion
         echo "Cleaning up"
         rm tmp.* ids.txt
     )

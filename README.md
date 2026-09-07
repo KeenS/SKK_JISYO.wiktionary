@@ -1,9 +1,9 @@
 # SKKのWiktionary辞書
 このリポジトリは日本語版Wikitonaryから生成したいくつかの辞書が含まれています。
 
-* SKK_JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
-* SKK_JISYO.shikakugoma: 四角号碼の変換辞書です
-* SKK_JISYO.jion: 字音仮名遣いで変換する辞書です
+* SKK-JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
+* SKK-JISYO.shikakugoma: 四角号碼の変換辞書です
+* SKK-JISYO.jion: 字音仮名遣いで変換する辞書です
 
 ## SKKのWiktionary辞書
 ### これは何？
@@ -66,7 +66,7 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 
 ### 字音仮名入力について
 
-漢字の音読みには同音なものが多く、例えば「しょう」だとSKK_JISYO.Lには174のエントリがあります。この中から「笑」を探すのは四葉のクローバーを探すくらい難しいですよね。でも「笑」の字音仮名「せう」だと候補は57に絞られます。同様に「渉」も「しょう」ですが字音仮名の「せふ」で変換すると候補は24に減ります。このように選択性の高い入力を使って変換のときに目grepする手間を少なくするのを目的としたのがこの辞書です。
+漢字の音読みには同音なものが多く、例えば「しょう」だとSKK-JISYO.Lには174のエントリがあります。この中から「笑」を探すのは四葉のクローバーを探すくらい難しいですよね。でも「笑」の字音仮名「せう」だと候補は57に絞られます。同様に「渉」も「しょう」ですが字音仮名の「せふ」で変換すると候補は24に減ります。このように選択性の高い入力を使って変換のときに目grepする手間を少なくするのを目的としたのがこの辞書です。
 
 字音仮名は1つ1つ覚えないといけないので使いはじめるのはちょっと大変です。そこで現代仮名遣いの候補のアノテーションに字音仮名の読みも付与しました。辞書には以下のようなエントリが含まれています。
 
@@ -171,21 +171,21 @@ $  cargo run --release --bin wiktionary_jisyo -- \
 
 ``` console
 # wiktionary辞書
-$ cat header.txt > SKK_JISYO.wiktionary
-$ cat tmp.wiktionary | skkdic-sort >> SKK_JISYO.wiktionary
+$ cat header.txt > SKK-JISYO.wiktionary
+$ cat tmp.wiktionary | skkdic-sort >> SKK-JISYO.wiktionary
 # 四角号碼辞書
-$ cat header.txt > SKK_JISYO.shikakugoma
-$ cat tmp.shikakugoma | skkdic-sort >> SKK_JISYO.shikakugoma
+$ cat header.txt > SKK-JISYO.shikakugoma
+$ cat tmp.shikakugoma | skkdic-sort >> SKK-JISYO.shikakugoma
 # 字音
-cat header.txt > SKK_JISYO.jion
-cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK_JISYO.jion
+cat header.txt > SKK-JISYO.jion
+cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK-JISYO.jion
 ```
 
 カレントディレクトリに辞書ができます。
 
 ```console
-$ ls SKK_JISYO.*
-SKK_JISYO.wiktionary  SKK_JISYO.jion  SKK_JISYO.shikakugoma
+$ ls SKK-JISYO.*
+SKK-JISYO.wiktionary  SKK-JISYO.jion  SKK-JISYO.shikakugoma
 ```
 
 wikitionaryに適切な情報が載ってないものもあるので `output.log` にはそれらの情報が出力されている。
