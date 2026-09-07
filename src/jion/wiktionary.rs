@@ -102,11 +102,6 @@ fn default_sort_readings(title: &str, body: &str) -> Vec<String> {
     if title.chars().all(|ch| ('ァ'..='ヶ').contains(&ch)) {
         return Vec::new();
     }
-    // The first value in a multi-value DEFAULTSORT is often a sort-only
-    // approximation. For example, 故事成語 has “こしせいこ こじせいご”:
-    // only the latter is the actual reading. In single-value DEFAULTSORT,
-    // however, the value is still the page's sort key and often the only
-    // available reading.
     let mut readings: Vec<String> = body
         .split_whitespace()
         .filter(|value| valid_reading(value))
@@ -191,6 +186,35 @@ pub fn is_kanji(ch: char) -> bool {
 static KANJITAB_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[ぁ-ゖ0-9]+$").expect("internal error: invalid kanjitab regex"));
 
+static JAPANESE_CATEGORY_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\[\[(?:category|カテゴリ):(?:\{\{ja\}\}|日本語|Japanese)(?:[_ ][^|\]]*)?\|([^|\]]+)\]\]",
+    )
+    .expect("internal error: invalid Japanese category regex")
+});
+
+fn japanese_category_sort_bodies(text: &str) -> Vec<String> {
+    JAPANESE_CATEGORY_REGEX
+        .captures_iter(text)
+        .map(|captures| captures[1].trim().to_string())
+        .collect()
+}
+
+fn category_sort_readings(title: &str, body: &str) -> Vec<String> {
+    let mut title_chars = title.chars();
+    if !(title_chars.next().is_some_and(is_kanji) && title_chars.next().is_none()) {
+        return Vec::new();
+    }
+    let mut readings = Vec::new();
+    for value in body.split_whitespace() {
+        let reading = value.to_lowercase();
+        if hiragana_only(&reading) && !readings.contains(&reading) {
+            readings.push(reading);
+        }
+    }
+    readings
+}
+
 pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
     let kanjitab_regex = &*KANJITAB_REGEX;
     let mut page = JapanesePage {
@@ -200,6 +224,13 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
 
     for body in default_sort_bodies(text) {
         for reading in default_sort_readings(title, &body) {
+            if !page.default_sorts.contains(&reading) {
+                page.default_sorts.push(reading);
+            }
+        }
+    }
+    for body in japanese_category_sort_bodies(text) {
+        for reading in category_sort_readings(title, &body) {
             if !page.default_sorts.contains(&reading) {
                 page.default_sorts.push(reading);
             }
@@ -778,6 +809,35 @@ mod tests {
     #[test]
     fn ignores_defaultsort_on_katakana_titles() {
         let page = parse_japanese_page("コスモス", "{{kana-DEFAULTSORT|オーストラリア}}");
+        assert!(page.default_sorts.is_empty());
+    }
+
+    #[test]
+    fn parses_japanese_category_sort_for_single_kanji() {
+        let page = parse_japanese_page("仙", "[[Category:{{ja}}|せん]]");
+        assert_eq!(page.default_sorts, vec!["せん".to_string()]);
+        assert_eq!(
+            wiktionary_entries(&page),
+            vec![WiktionaryEntry {
+                reading: "せん".into(),
+                candidate: "仙".into(),
+                suru: false,
+                source: EntrySource::Idiom,
+            }]
+        );
+    }
+
+    #[test]
+    fn parses_localized_japanese_category_sort() {
+        let page = parse_japanese_page("藍", "[[カテゴリ:{{ja}} 色|あい]]");
+        assert_eq!(page.default_sorts, vec!["あい".to_string()]);
+    }
+
+    #[test]
+    fn ignores_category_sort_for_non_single_kanji_titles() {
+        let page = parse_japanese_page("間隔", "[[Category:{{ja}}|かんかく]]");
+        assert!(page.default_sorts.is_empty());
+        let page = parse_japanese_page("歩く", "[[Category:{{ja}}|あるく]]");
         assert!(page.default_sorts.is_empty());
     }
 
