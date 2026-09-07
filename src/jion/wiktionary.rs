@@ -32,19 +32,21 @@ pub struct WagokanjiSource {
     pub reading: String,
 }
 
-fn bold_lang_ja_bodies(text: &str) -> Vec<String> {
-    let mut bodies = Vec::new();
-    let marker = "{{lang|ja|";
-    let mut cursor = 0;
-    while let Some(start) = text[cursor..].find(marker) {
-        let content_start = cursor + start + marker.len();
-        let Some(end) = text[content_start..].find("}}") else {
-            break;
-        };
-        bodies.push(text[content_start..content_start + end].to_string());
-        cursor = content_start + end + 2;
+fn bold_wagokanji_pairs(text: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    for source in bold_wagokanji_sources(text) {
+        if !pairs.contains(&source) {
+            pairs.push(source);
+        }
     }
-    bodies
+    pairs
+}
+
+fn bold_wagokanji_sources(text: &str) -> impl Iterator<Item = (String, String)> + use<'_> {
+    template_bodies(text, "lang|ja")
+        .into_iter()
+        .chain(text.lines())
+        .filter_map(bold_wagokanji_pair)
 }
 
 fn bold_wagokanji_pair(body: &str) -> Option<(String, String)> {
@@ -85,19 +87,11 @@ pub enum EntrySource {
 }
 
 fn default_sort_bodies(text: &str) -> Vec<String> {
-    let mut bodies = Vec::new();
-    for marker in ["{{DEFAULTSORT:", "{{DEFAULTSORT|", "{{kana-DEFAULTSORT|"] {
-        let mut cursor = 0;
-        while let Some(start) = text[cursor..].find(marker) {
-            let start = cursor + start + marker.len();
-            let Some(end) = text[start..].find("}}") else {
-                break;
-            };
-            bodies.push(text[start..start + end].to_string());
-            cursor = start + end + 2;
-        }
-    }
-    bodies
+    ["DEFAULTSORT", "kana-DEFAULTSORT"]
+        .into_iter()
+        .flat_map(|name| template_bodies(text, name))
+        .map(str::to_string)
+        .collect()
 }
 
 fn valid_reading(value: &str) -> bool {
@@ -152,16 +146,18 @@ pub enum KanjiWordError {
 
 fn template_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
     let mut bodies = Vec::new();
-    let marker = format!("{{{{{name}|");
+    let markers = [format!("{{{{{name}|"), format!("{{{{{name}:")];
     let mut cursor = 0;
-    while let Some(start) = text[cursor..].find(&marker) {
-        let start = cursor + start;
-        let content_start = start + marker.len();
-        let Some(content_end) = text[content_start..].find("}}") else {
-            break;
-        };
-        bodies.push(&text[content_start..content_start + content_end]);
-        cursor = content_start + content_end + 2;
+    for marker in markers {
+        while let Some(start) = text[cursor..].find(marker.as_str()) {
+            let start = cursor + start;
+            let content_start = start + marker.len();
+            let Some(content_end) = text[content_start..].find("}}") else {
+                break;
+            };
+            bodies.push(&text[content_start..content_start + content_end]);
+            cursor = content_start + content_end + 2;
+        }
     }
     bodies
 }
@@ -266,27 +262,15 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    for body in bold_lang_ja_bodies(text) {
-        if let Some((candidate, reading)) = bold_wagokanji_pair(&body) {
-            let source = WagokanjiSource { candidate, reading };
-            if !page.wagokanji_sources.contains(&source) {
-                page.wagokanji_sources.push(source);
-            }
+    for (candidate, reading) in bold_wagokanji_pairs(text) {
+        let source = WagokanjiSource { candidate, reading };
+        if !page.wagokanji_sources.contains(&source) {
+            page.wagokanji_sources.push(source);
         }
     }
-    for line in text.lines() {
-        if let Some((candidate, reading)) = bold_wagokanji_pair(line) {
-            let source = WagokanjiSource { candidate, reading };
-            if !page.wagokanji_sources.contains(&source) {
-                page.wagokanji_sources.push(source);
-            }
-        }
-    }
-    if !page.wagokanji_readings.is_empty() {
-        for reading in &page.wagokanji_readings {
-            if !page.verb_titles.contains(reading) {
-                page.verb_titles.push(reading.clone());
-            }
+    for reading in &page.wagokanji_readings {
+        if !page.verb_titles.contains(reading) {
+            page.verb_titles.push(reading.clone());
         }
     }
 
@@ -398,7 +382,7 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    for body in template_bodies(text, "ja-adjectival").into_iter() {
+    for body in template_bodies(text, "ja-adjectival") {
         for param in split_params(body) {
             if param.contains('=') {
                 continue;
@@ -610,8 +594,6 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
         }
     }
 
-    // On kana-titled pages, `{{ja-noun|歯}}` means that the page title (“は”)
-    // is the reading and the positional parameter is the kanji candidate.
     if kana_only(&page.title) {
         for candidate in &page.noun_candidates {
             if candidate.chars().any(is_kanji) {
@@ -654,9 +636,6 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             entries.push(entry);
         }
     }
-    // `ja-verb-suru` pages may be ordinary noun entries such as “移動”, but
-    // they can also be lexicalized pages such as “緘する”. Do not use the
-    // page title itself as a candidate when it already ends with “する”.
     if page.title.chars().any(is_kanji) && !page.title.ends_with("する") {
         for reading in &page.suru_readings {
             entries.push(WiktionaryEntry {
@@ -695,9 +674,6 @@ fn okuri_candidate(page: &JapanesePage, candidate: &str) -> Option<WiktionaryEnt
         return None;
     }
 
-    // SKK uses the first consonant of the okurigana as the okuri-ari key.
-    // For example, “混ぜる” is registered as “まz /混/”, and “歩く” as
-    // “あるk /歩/”.
     let romaji = okuri_romaji(suffix.chars().next()?)?;
     let stem_reading = page
         .wagokanji_readings

@@ -1,11 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Mediawiki {
-    pub page: Vec<Page>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Page {
     pub ns: u64,
     pub id: u64,
@@ -77,8 +70,6 @@ impl Page {
         .into_iter()
         .filter_map(|marker| self.revision.text.find(marker))
         .min()?;
-        // DEFAULTSORT is often placed before the Japanese language section.
-        // It is a page-level sort key and must remain visible to the parser.
         let end = self.next_language_section_offset(start);
         Some(format!(
             "{}{}",
@@ -145,10 +136,9 @@ mod tests {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Revision {
     pub id: u64,
-    // timestamp: String,
     pub comment: Option<String>,
     pub text: String,
 }

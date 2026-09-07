@@ -147,6 +147,21 @@ struct Report {
     noun_readings: usize,
 }
 
+impl Report {
+    fn add_entries(&mut self, entries: &[WiktionaryEntry]) {
+        for entry in entries {
+            match entry.source {
+                EntrySource::KanjiWord => self.kanji_entries += 1,
+                EntrySource::Noun => self.noun_entries += 1,
+                EntrySource::Idiom => self.idiom_entries += 1,
+                EntrySource::WagoOkuri | EntrySource::Suru | EntrySource::SuruNoun => {
+                    self.wago_entries += 1
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Dictionary {
     okuri_ari: Vec<Entry>,
@@ -304,26 +319,7 @@ fn run(options: Options) -> io::Result<()> {
         for entry in page_jion_entries {
             jion_entries.insert(entry_key(&entry), entry);
         }
-        report.kanji_entries += entries
-            .iter()
-            .filter(|entry| entry.source == EntrySource::KanjiWord)
-            .count();
-        report.noun_entries += entries
-            .iter()
-            .filter(|entry| entry.source == EntrySource::Noun)
-            .count();
-        report.wago_entries += entries
-            .iter()
-            .filter(|entry| {
-                entry.source == EntrySource::WagoOkuri
-                    || entry.source == EntrySource::Suru
-                    || entry.source == EntrySource::SuruNoun
-            })
-            .count();
-        report.idiom_entries += entries
-            .iter()
-            .filter(|entry| entry.source == EntrySource::Idiom)
-            .count();
+        report.add_entries(&entries);
         for entry in converted {
             output_entries.insert(entry_key(&entry), entry);
         }
