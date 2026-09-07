@@ -8,7 +8,7 @@
 ## SKKのWiktionary辞書
 ### これは何？
 
-日本語版Wiktionaryのページから生成した現代仮名遣いのSKK辞書です。ベースとなる辞書を目指しています。
+SKK-JISYO.wiktionaryは日本語版Wiktionaryのページから生成した現代仮名遣いのSKK辞書です。ベースとなる辞書を目指しています。
 SKK-JISYO.Lとの違いは以下の通りです。
 
 |           | .L    | .wiktionary |
@@ -23,7 +23,7 @@ SKK-JISYO.Lとの違いは以下の通りです。
 ## SKKの四角号碼辞書
 ### これは何？
 
-SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書です。[Wiktionaryの漢字の記事](https://ja.wiktionary.org/wiki/カテゴリ:漢字https://ja.wiktionary.org/wiki/カテゴリ:漢字)から生成しています。
+SKK-JISYO.shikakugomaはSKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書です。[Wiktionaryの漢字の記事](https://ja.wiktionary.org/wiki/カテゴリ:漢字https://ja.wiktionary.org/wiki/カテゴリ:漢字)から生成しています。
 
 ### 四角号碼入力について
 
@@ -60,7 +60,7 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 ## SKKの字音仮名遣い辞書
 ### これは何？
 
-手元のSKK辞書を[字音仮名遣い](https://ja.wikipedia.org/wiki/%E5%AD%97%E9%9F%B3%E4%BB%AE%E5%90%8D%E9%81%A3)で変換するためのツールです。また、[アノテーション](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=annotation)も含みます。
+SKK-JISYO.jionはSKKで[字音仮名遣い](https://ja.wikipedia.org/wiki/%E5%AD%97%E9%9F%B3%E4%BB%AE%E5%90%8D%E9%81%A3)を使って変換するためのツールです。また、[アノテーション](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=annotation)も含みます。
 
 ### 字音仮名入力について
 
