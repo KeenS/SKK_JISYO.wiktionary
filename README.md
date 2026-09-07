@@ -20,7 +20,6 @@ SKK-JISYO.Lとの違いは以下の通りです。
 
 通常のSKK辞書として使えます。
 
-
 ## SKKの四角号碼辞書
 ### これは何？
 
@@ -41,7 +40,6 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 ```
 ▼碼
 ```
-
 
 四角号碼の1162に該当する漢字は「碼」の他にも「酊」など4つほどその候補が全て出てきます。ですが附画の0を加えて11620とすると「酊」のみ出てきます。
 
@@ -82,7 +80,6 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 ### 使い方
 
 普通のSKK辞書のように使えます。アノテーションをサポートしていないエンジンで問題が発生する場合は[unannotation.awk](http://openlab.jp/skk/skk/tools/unannotation.awk)などを利用して削除して下さい。
-
 
 ### 変換精度に関する注意
 
@@ -139,7 +136,7 @@ sqlite3でできたら手軽でよかったが、スキーマの `unsigned` に�
 ここから「カテゴリー:漢字」に属する記事のIDを取得する。 `ids.txt` に出力する。
 
 ```console
-$ docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_to = 0xE6BCA2E5AD97 ORDER BY cl_from' > ids.txt
+$ docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_target_id = 90955 ORDER BY cl_from' > ids.txt
 ```
 
 MySQLはもう不要なので落としておく
