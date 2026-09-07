@@ -40,4 +40,14 @@
 Not Japanese.</text>
     </revision>
   </page>
+  <page>
+    <title>緘する</title>
+    <ns>0</ns>
+    <id>5</id>
+    <revision>
+      <id>5</id>
+      <text>=={{ja}}==
+{{ja-verb-suru|[[かんする]]}}</text>
+    </revision>
+  </page>
 </mediawiki>

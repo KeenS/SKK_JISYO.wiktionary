@@ -121,7 +121,11 @@ pub fn okuri_entries(page: &JapanesePage) -> (Vec<Entry>, Vec<(String, OkuriErro
 pub fn suru_entries(page: &JapanesePage) -> Vec<Entry> {
     page.suru_readings
         .iter()
-        .map(|reading| Entry::new(reading.as_str(), format!("{}/する", page.title)))
+        .map(|reading| Entry {
+            reading: reading.clone(),
+            candidates: vec![page.title.clone()],
+            annotations: Vec::new(),
+        })
         .collect()
 }
 
@@ -157,12 +161,19 @@ mod tests {
     #[test]
     fn converts_suru_verb() {
         let page = parse_japanese_page("移動", "{{ja-verb-suru|いどう}}");
-        assert_eq!(suru_entries(&page), vec![Entry::new("いどう", "移動/する")]);
+        assert_eq!(
+            suru_entries(&page),
+            vec![Entry {
+                reading: "いどう".into(),
+                candidates: vec!["移動".into()],
+                annotations: Vec::new(),
+            }]
+        );
     }
 
     #[test]
-    fn converts_suru_noun() {
+    fn keeps_suru_noun_without_suffix() {
         let page = parse_japanese_page("保護", "{{ja-noun-suru|ほご}}");
-        assert_eq!(suru_entries(&page), vec![Entry::new("ほご", "保護/する")]);
+        assert_eq!(suru_entries(&page), Vec::<Entry>::new());
     }
 }

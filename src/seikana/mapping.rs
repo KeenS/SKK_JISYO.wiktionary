@@ -65,3 +65,16 @@ pub fn to_index(mappings: &[Mapping]) -> HashMap<String, Vec<Mapping>> {
     }
     index
 }
+
+/// Builds the mapping index once; reuse it for many pages to avoid O(pages * mappings) work.
+pub struct MappingIndex(HashMap<String, Vec<Mapping>>);
+
+impl MappingIndex {
+    pub fn new(mappings: &[Mapping]) -> Self {
+        Self(to_index(mappings))
+    }
+
+    pub fn get(&self, kanji: &str) -> Option<&Vec<Mapping>> {
+        self.0.get(kanji)
+    }
+}

@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use super::entry::Entry;
-use super::mapping::{to_index, Mapping};
+use super::mapping::MappingIndex;
 use super::rules::{canonicalize_modern, normalize_historical, render_segment};
 use super::segmentation::Segment;
 
@@ -12,12 +13,14 @@ pub struct JapanesePage {
     pub title: String,
     pub kanjitabs: Vec<Kanjitab>,
     pub wagokanji_readings: Vec<String>,
+    pub noun_candidates: Vec<String>,
     pub noun_readings: Vec<String>,
     pub pron_readings: Vec<String>,
     pub verb_titles: Vec<String>,
     pub adjective_titles: Vec<String>,
     pub adverb_titles: Vec<String>,
     pub suru_readings: Vec<String>,
+    pub noun_suru_readings: Vec<String>,
     pub old_japanese_titles: Vec<String>,
 }
 
@@ -25,14 +28,17 @@ pub struct JapanesePage {
 pub struct WiktionaryEntry {
     pub reading: String,
     pub candidate: String,
+    pub suru: bool,
     pub source: EntrySource,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntrySource {
     KanjiWord,
+    Noun,
     WagoOkuri,
     Suru,
+    SuruNoun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -92,13 +98,22 @@ fn hiragana_only(value: &str) -> bool {
     !value.is_empty() && value.chars().all(|ch| ('ぁ'..='ゟ').contains(&ch))
 }
 
+fn kana_only(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|ch| ('ぁ'..='ゟ').contains(&ch) || ('ァ'..='ヶ').contains(&ch))
+}
+
 pub fn is_kanji(ch: char) -> bool {
     matches!(ch, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}')
 }
 
+static KANJITAB_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[ぁ-ゖ0-9]+$").expect("internal error: invalid kanjitab regex"));
+
 pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
-    let kanjitab_regex =
-        Regex::new(r"^[ぁ-ゖ0-9]+$").expect("internal error: invalid kanjitab regex");
+    let kanjitab_regex = &*KANJITAB_REGEX;
     let mut page = JapanesePage {
         title: title.to_string(),
         ..JapanesePage::default()
@@ -172,9 +187,13 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
             if param.contains('=') {
                 continue;
             }
-            let reading = clean_wikitext(param);
-            if hiragana_only(&reading) && !page.noun_readings.contains(&reading) {
-                page.noun_readings.push(reading);
+            let value = clean_wikitext(param);
+            if value.chars().any(is_kanji) {
+                if !value.is_empty() && !page.noun_candidates.contains(&value) {
+                    page.noun_candidates.push(value);
+                }
+            } else if hiragana_only(&value) && !page.noun_readings.contains(&value) {
+                page.noun_readings.push(value);
             }
         }
     }
@@ -222,8 +241,11 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
                 continue;
             }
             let reading = clean_wikitext(param);
-            if hiragana_only(&reading) && !page.suru_readings.contains(&reading) {
-                page.suru_readings.push(reading);
+            if hiragana_only(&reading)
+                && !page.suru_readings.contains(&reading)
+                && !page.noun_suru_readings.contains(&reading)
+            {
+                page.noun_suru_readings.push(reading);
             }
         }
     }
@@ -335,8 +357,8 @@ pub fn matched_readings(page: &JapanesePage) -> Vec<String> {
     readings
 }
 
-pub fn kanji_words(page: &JapanesePage, mappings: &[Mapping]) -> Vec<KanjiWord> {
-    let index = to_index(mappings);
+pub fn kanji_words(page: &JapanesePage, mappings: &MappingIndex) -> Vec<KanjiWord> {
+    let index = mappings;
     let whole_readings = matched_readings(page);
     let mut words = Vec::new();
 
@@ -428,14 +450,17 @@ pub fn convert_kanji_word(word: &KanjiWord) -> Option<Entry> {
 
 pub fn kanji_word_entries(
     page: &JapanesePage,
-    mappings: &[Mapping],
-) -> (Vec<Entry>, Vec<(String, KanjiWordError)>) {
+    mappings: &MappingIndex,
+) -> (Vec<Entry>, Vec<Entry>, Vec<(String, KanjiWordError)>) {
     let mut entries = Vec::new();
+    let mut seikana_entries = Vec::new();
     let mut errors = Vec::new();
     for word in kanji_words(page, mappings) {
-        match convert_kanji_word(&word) {
-            Some(entry) => entries.push(entry),
-            None => errors.push((word.candidate.clone(), KanjiWordError::RestoreFailed)),
+        entries.push(Entry::new(word.reading.clone(), word.candidate.clone()));
+        if let Some(entry) = convert_kanji_word(&word) {
+            seikana_entries.push(entry);
+        } else {
+            errors.push((word.candidate.clone(), KanjiWordError::RestoreFailed));
         }
     }
     if page.kanjitabs.is_empty() && matched_readings(page).is_empty() {
@@ -443,11 +468,26 @@ pub fn kanji_word_entries(
     } else if entries.is_empty() && errors.is_empty() {
         errors.push((page.title.clone(), KanjiWordError::MappingNotFound));
     }
-    (entries, errors)
+    (entries, seikana_entries, errors)
 }
 
 pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     let mut entries = Vec::new();
+    // On kana-titled pages, `{{ja-noun|歯}}` means that the page title (“は”)
+    // is the reading and the positional parameter is the kanji candidate.
+    if kana_only(&page.title) {
+        for candidate in &page.noun_candidates {
+            if candidate.chars().any(is_kanji) {
+                entries.push(WiktionaryEntry {
+                    reading: page.title.clone(),
+                    candidate: candidate.clone(),
+                    suru: false,
+                    source: EntrySource::Noun,
+                });
+            }
+        }
+    }
+
     for candidate in &page.verb_titles {
         if let Some(entry) = okuri_candidate(page, candidate) {
             entries.push(entry);
@@ -461,18 +501,38 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             entries.push(entry);
         }
     }
+    for candidate in &page.adverb_titles {
+        if page.verb_titles.contains(candidate) || page.adjective_titles.contains(candidate) {
+            continue;
+        }
+        if let Some(entry) = okuri_candidate(page, candidate) {
+            entries.push(entry);
+        }
+    }
     if let Some(entry) = okuri_candidate(page, page.title.as_str()) {
         entries.push(entry);
     }
-
-    for reading in &page.suru_readings {
-        entries.push(WiktionaryEntry {
-            reading: reading.clone(),
-            candidate: format!("{}/する", page.title),
-            source: EntrySource::Suru,
-        });
+    // `ja-verb-suru` pages may be ordinary noun entries such as “移動”, but
+    // they can also be lexicalized pages such as “緘する”. Do not use the
+    // page title itself as a candidate when it already ends with “する”.
+    if page.title.chars().any(is_kanji) && !page.title.ends_with("する") {
+        for reading in &page.suru_readings {
+            entries.push(WiktionaryEntry {
+                reading: reading.clone(),
+                candidate: page.title.clone(),
+                suru: true,
+                source: EntrySource::Suru,
+            });
+        }
+        for reading in &page.noun_suru_readings {
+            entries.push(WiktionaryEntry {
+                reading: reading.clone(),
+                candidate: page.title.clone(),
+                suru: false,
+                source: EntrySource::SuruNoun,
+            });
+        }
     }
-
     let mut unique_entries = Vec::new();
     for entry in entries {
         if !unique_entries.iter().any(|other: &WiktionaryEntry| {
@@ -493,35 +553,34 @@ fn okuri_candidate(page: &JapanesePage, candidate: &str) -> Option<WiktionaryEnt
         return None;
     }
 
-    let (romaji, reading_suffix) = if suffix.chars().count() == 1 {
-        let ch = suffix.chars().next()?;
-        (okuri_romaji(ch)?, suffix)
-    } else if candidate.ends_with('い') {
-        (okuri_romaji(suffix.chars().next()?)?, suffix)
-    } else {
-        (
-            okuri_romaji(suffix.chars().last()?)?,
-            &suffix[suffix.char_indices().nth(1)?.0..],
-        )
-    };
+    // SKK uses the first consonant of the okurigana as the okuri-ari key.
+    // For example, “混ぜる” is registered as “まz /混/”, and “歩く” as
+    // “あるk /歩/”.
+    let romaji = okuri_romaji(suffix.chars().next()?)?;
     let stem_reading = page
         .wagokanji_readings
         .iter()
-        .filter_map(|reading| reading.strip_suffix(reading_suffix))
+        .filter_map(|reading| reading.strip_suffix(suffix))
         .max_by_key(|reading| reading.chars().count())?;
 
     let mut key = String::with_capacity(stem_reading.len() + 1);
     key.push_str(stem_reading);
     key.push(romaji);
+
     Some(WiktionaryEntry {
         reading: key,
         candidate: stem.to_string(),
+        suru: false,
         source: EntrySource::WagoOkuri,
     })
 }
 
 pub fn to_entry(entry: &WiktionaryEntry) -> Entry {
-    Entry::new(entry.reading.as_str(), entry.candidate.as_str())
+    Entry {
+        reading: entry.reading.clone(),
+        candidates: vec![entry.candidate.clone()],
+        annotations: Vec::new(),
+    }
 }
 
 fn split_candidate(candidate: &str) -> (&str, &str) {
@@ -541,12 +600,16 @@ fn okuri_romaji(ch: char) -> Option<char> {
         'う' => 'u',
         'え' => 'e',
         'お' => 'o',
-        'か' | 'が' | 'き' | 'ぎ' | 'く' | 'ぐ' | 'け' | 'げ' | 'こ' | 'ご' => 'k',
-        'さ' | 'ざ' | 'し' | 'じ' | 'す' | 'ず' | 'せ' | 'ぜ' | 'そ' | 'ぞ' => 's',
-        'た' | 'だ' | 'ち' | 'ぢ' | 'つ' | 'づ' | 'て' | 'で' | 'と' | 'ど' => 't',
+        'か' | 'き' | 'く' | 'け' | 'こ' => 'k',
+        'が' | 'ぎ' | 'ぐ' | 'げ' | 'ご' => 'g',
+        'さ' | 'す' | 'せ' | 'そ' => 's',
+        'ざ' | 'じ' | 'ず' | 'ぜ' | 'ぞ' => 'z',
+        'た' | 'ち' | 'つ' | 'て' | 'と' => 't',
+        'だ' | 'ぢ' | 'づ' | 'で' | 'ど' => 'd',
         'な' | 'に' | 'ぬ' | 'ね' | 'の' => 'n',
-        'は' | 'ば' | 'ぱ' | 'ひ' | 'び' | 'ぴ' | 'ふ' | 'ぶ' | 'ぷ' | 'へ' | 'べ' | 'ぺ'
-        | 'ほ' | 'ぼ' | 'ぽ' => 'h',
+        'は' | 'ひ' | 'ふ' | 'へ' | 'ほ' => 'h',
+        'ば' | 'び' | 'ぶ' | 'べ' | 'ぼ' => 'b',
+        'ぱ' | 'ぴ' | 'ぷ' | 'ぺ' | 'ぽ' => 'p',
         'ま' | 'み' | 'む' | 'め' | 'も' => 'm',
         'や' | 'ゆ' | 'よ' => 'y',
         'ら' | 'り' | 'る' | 'れ' | 'ろ' => 'r',
@@ -559,6 +622,7 @@ fn okuri_romaji(ch: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::seikana::mapping::Mapping;
 
     #[test]
     fn parses_kanjitab_with_override() {
@@ -587,6 +651,7 @@ mod tests {
             vec![WiktionaryEntry {
                 reading: "あるk".into(),
                 candidate: "歩".into(),
+                suru: false,
                 source: EntrySource::WagoOkuri,
             }]
         );
@@ -626,6 +691,32 @@ mod tests {
     }
 
     #[test]
+    fn converts_adverb_title_to_okuri_entry() {
+        let page = parse_japanese_page(
+            "はやく",
+            "{{ja-wagokanji|はやく}}{{ja-adv}}【[[早]]く、[[速]]く】",
+        );
+        let entries = wiktionary_entries(&page);
+        assert_eq!(
+            entries,
+            vec![
+                WiktionaryEntry {
+                    reading: "はやk".into(),
+                    candidate: "早".into(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                },
+                WiktionaryEntry {
+                    reading: "はやk".into(),
+                    candidate: "速".into(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn parses_adjective_titles() {
         let page = parse_japanese_page("大きい", "{{ja-adj}}【[[大]]きい】");
         assert_eq!(page.adjective_titles, vec!["大きい".to_string()]);
@@ -655,20 +746,22 @@ mod tests {
             entries,
             vec![
                 WiktionaryEntry {
-                    reading: "まぜr".into(),
+                    reading: "まz".into(),
                     candidate: "混".into(),
+                    suru: false,
                     source: EntrySource::WagoOkuri,
                 },
                 WiktionaryEntry {
-                    reading: "まぜr".into(),
+                    reading: "まz".into(),
                     candidate: "交".into(),
+                    suru: false,
                     source: EntrySource::WagoOkuri,
                 }
             ]
         );
         assert_eq!(
             entries.iter().map(to_entry).collect::<Vec<_>>(),
-            vec![Entry::new("まぜr", "混"), Entry::new("まぜr", "交")]
+            vec![Entry::new("まz", "混"), Entry::new("まz", "交")]
         );
     }
 
@@ -691,12 +784,40 @@ mod tests {
         let entries = wiktionary_entries(&page);
         assert_eq!(
             entries.iter().map(to_entry).collect::<Vec<_>>(),
-            vec![Entry::new("いどう", "移動/する")]
+            vec![Entry {
+                reading: "いどう".into(),
+                candidates: vec!["移動".into()],
+                annotations: Vec::new(),
+            }]
         );
     }
 
-    fn mappings() -> Vec<Mapping> {
-        vec![
+    #[test]
+    fn converts_noun_suru_entry_without_suru_suffix() {
+        let page = parse_japanese_page("咆哮", "{{ja-noun-suru|ほうこう}}");
+        let entries = wiktionary_entries(&page);
+        assert_eq!(
+            entries.iter().map(to_entry).collect::<Vec<_>>(),
+            vec![Entry::new("ほうこう", "咆哮")]
+        );
+    }
+
+    #[test]
+    fn keeps_verb_suru_entry_with_suru_suffix() {
+        let page = parse_japanese_page("移動", "{{ja-noun-suru|いどう}}\n{{ja-verb-suru|いどう}}");
+        let entries = wiktionary_entries(&page);
+        assert_eq!(
+            entries.iter().map(to_entry).collect::<Vec<_>>(),
+            vec![Entry {
+                reading: "いどう".into(),
+                candidates: vec!["移動".into()],
+                annotations: Vec::new(),
+            }]
+        );
+    }
+
+    fn mappings() -> MappingIndex {
+        MappingIndex::new(&[
             Mapping {
                 kanji: "学".into(),
                 modern: "がく".into(),
@@ -727,7 +848,7 @@ mod tests {
                 modern: "ご".into(),
                 historical: "ご".into(),
             },
-        ]
+        ])
     }
 
     #[test]
@@ -736,9 +857,10 @@ mod tests {
             "学校",
             "{{ja-kanjitab|がく|k1=がっ|こう|yomi=o}}{{ja-noun|がっこう}}",
         );
-        let (entries, errors) = kanji_word_entries(&page, &mappings());
+        let (entries, seikana_entries, errors) = kanji_word_entries(&page, &mappings());
         assert!(errors.is_empty());
-        assert_eq!(entries, vec![Entry::new("がっかう", "学校")]);
+        assert_eq!(entries, vec![Entry::new("がっこう", "学校")]);
+        assert_eq!(seikana_entries, vec![Entry::new("がっかう", "学校")]);
     }
 
     #[test]

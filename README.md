@@ -1,16 +1,32 @@
-# SKKのWikitonary辞書
-
+# SKKのWiktionary辞書
 このリポジトリは日本語版Wikitonaryから生成したいくつかの辞書が含まれています。
 
-* SKK_JISYO.shikakugoma: 四角号碼の辞書です
-* SKK_JISYO.seikana: (experimental) 歴史的仮名遣い（正假名）の辞書です
+* SKK_JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
+* SKK_JISYO.shikakugoma: 四角号碼の変換辞書です
+* SKK_JISYO.jion: 字音仮名遣いで変換する辞書です
 
-# SKKの四角号碼辞書
-## これは何？
+## SKKのWiktionary辞書
+### これは何？
+
+日本語版Wiktionaryのページから生成した現代仮名遣いのSKK辞書です。ベースとなる辞書を目指しています。
+SKK-JISYO.Lとの違いは以下の通りです。
+
+|    | .L | .wiktionary |
+|----|--------------|-----|
+|ライセンス | GPL | CC BY-SA 4.0 |
+| 単語数 | 約18万 | 約3.6万 |
+
+### 使い方
+
+通常のSKK辞書として使えます。
+
+
+## SKKの四角号碼辞書
+### これは何？
 
 SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書です。[Wiktionaryの漢字の記事](https://ja.wiktionary.org/wiki/カテゴリ:漢字https://ja.wiktionary.org/wiki/カテゴリ:漢字)から生成しています。
 
-## 四角号碼入力について
+### 四角号碼入力について
 
 漢字に対応する4つの数字（附画を加えると5つ）のコードから漢字に変換します。このコードは漢字の見た目から決まるので漢字ごとに番号を覚えたりしなくても変換したい漢字さえ思い浮かんでいれば変換できます。読み方が分からなくても大丈夫です。また、選択性が非常に高く、4文字のコードで候補を数個に絞り込めます。附画を加えるとさらに限定できます。
 
@@ -43,16 +59,16 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 
 1つの辞書しか扱えないSKKエンジンを使っている場合は[skkdic-expr2](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=%BC%AD%BD%F1%A5%E1%A5%F3%A5%C6%A5%CA%A5%F3%A5%B9%A5%C4%A1%BC%A5%EB)などで1つにまとめて下さい。
 
-# SKKの歴史的仮名遣い辞書
-## これは何？
+## SKKの字音仮名遣い辞書
+### これは何？
 
-漢字を歴史的仮名遣いで変換するための（実験的な）辞書です。また、[アノテーション](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=annotation)も含みます。歴史的仮名遣いを普段から使っている人は正假名と呼んでいるようです。こっちの方が短いので以後こっちで説明します。
+手元のSKK辞書を[字音仮名遣い](https://ja.wikipedia.org/wiki/%E5%AD%97%E9%9F%B3%E4%BB%AE%E5%90%8D%E9%81%A3)で変換するためのツールです。また、[アノテーション](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=annotation)も含みます。
 
-## 正假名入力について
+### 字音仮名入力について
 
-漢字の音読みには同音なものが多く、例えば「しょう」だとSKK_JISYO.Lには174のエントリがあります。この中から「笑」を探すのは四葉のクローバーを探すくらい難しいですよね。でも「笑」の正假名「せう」だと候補は57に絞られます。同様に「渉」も「しょう」ですが正假名の「せふ」で変換すると候補は24に減ります。このように選択性の高い入力を使って変換のときに目grepする手間を少なくするのを目的としたのがこの辞書です。
+漢字の音読みには同音なものが多く、例えば「しょう」だとSKK_JISYO.Lには174のエントリがあります。この中から「笑」を探すのは四葉のクローバーを探すくらい難しいですよね。でも「笑」の字音仮名「せう」だと候補は57に絞られます。同様に「渉」も「しょう」ですが字音仮名の「せふ」で変換すると候補は24に減ります。このように選択性の高い入力を使って変換のときに目grepする手間を少なくするのを目的としたのがこの辞書です。
 
-正假名は1つ1つ覚えないといけないので使いはじめるのはちょっと大変です。そこで現代仮名遣いの候補のアノテーションに正假名の読みも付与しました。辞書には以下のようなエントリが含まれています。
+字音仮名は1つ1つ覚えないといけないので使いはじめるのはちょっと大変です。そこで現代仮名遣いの候補のアノテーションに字音仮名の読みも付与しました。辞書には以下のようなエントリが含まれています。
 
 ```
 せう /笑/
@@ -61,21 +77,22 @@ SKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書�
 しょう /渉;セフ/
 ```
 
-アノテーションをサポートしている辞書なら変換候補内に表示してくれます。正假名を覚えたいときは現代仮名遣いで一旦変換候補を出し、アノテーションを見て覚えてから再度正假名で変換するように習慣づければ覚えられるのではないかと思います。
+アノテーションをサポートしている辞書なら変換候補内に表示してくれます。字音仮名を覚えたいときは現代仮名遣いで一旦変換候補を出し、アノテーションを見て覚えてから再度字音仮名で変換するように習慣づければ覚えられるのではないかと思います。
 
-## 使い方
+### 使い方
 
 普通のSKK辞書のように使えます。アノテーションをサポートしていないエンジンで問題が発生する場合は[unannotation.awk](http://openlab.jp/skk/skk/tools/unannotation.awk)などを利用して削除して下さい。
 
-## experimental版の制限事項
 
-Wiktionaryの漢字のページから生成しているので単一の漢字にのみ対応しています。熟語には対応していません。例えば「高笑」は正假名で「かうせう」ですが「かうせう」では変換できず、「かう」「せう」とそれぞれ変換しないといけません。
+### 変換精度に関する注意
 
-将来的には熟語に対応したいと考えていますが、ソースとなる情報源がなく、既存の辞書を泥臭く変換していく作業になりそうなので予定は未定です。
+熟語の読みは必ずしも漢字ごとの音読みの単純な結合ではありません。促音化、拗音、連濁、音便などがあります。基本的な促音化と拗音を処理していますが、一意に分割できないものや対応する読みが見つからないものは辞書にありません。読み戻し検査（字音仮名から現代仮名遣いを復元して元の読みと一致するか）を通らないものは辞書に出力しません。
+
+wiktionaryに載っている古音から生成しているので、原義の字音仮名遣いとはずれがあると思われます。
 
 # ライセンス
 
-* 辞書はWiktionaryのライセンスに従い[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/deed.ja)で提供されます。
+* 辞書はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/3.0/deed.ja)で提供されます。
 * その他のコード類はMITライセンスです。
 
 # 自分で生成する
@@ -133,31 +150,42 @@ $ docker stop wiktionary
 
 ### 辞書生成
 
-`cargo run` する。
-
 ```console
-# 四角号碼辞書
+# 四角号碼辞書と漢字読み対応表
 $ cargo run --release --bin shikakugoma ids.txt jawiktionary-*-pages-articles.xml > output.log
-# 正假名辞書辞書
-$ cargo run --release --bin seikana ids.txt jawiktionary-*-pages-articles.xml > output.log
+$ cargo run --release --bin jion ids.txt jawiktionary-*-pages-articles.xml >> output.log
 ```
 
-このデータは正しくソートされていないので `skkdic-sort` を使ってソートする
+辞書や対応表などを生成する
 
 ``` console
+$  cargo run --release --bin wiktionary_jisyo -- \
+     --xml jawiktionary-*-pages-articles.xml \
+     --mapping kanji_readings.tsv \
+     --output tmp.wiktionary \
+     --jion-output tmp.wiktionary.jion \
+     --report wiktionary-jisyo-report.tsv
+```
+
+このデータは正しくソートされていないので `skkdic-sort` を使ってソートします。
+
+``` console
+# wiktionary辞書
+$ cat header.txt > SKK_JISYO.wiktionary
+$ cat tmp.wiktionary | skkdic-sort >> SKK_JISYO.wiktionary
 # 四角号碼辞書
 $ cat header.txt > SKK_JISYO.shikakugoma
 $ cat tmp.shikakugoma | skkdic-sort >> SKK_JISYO.shikakugoma
-# 正假名辞書辞書
-$ cat header.txt > SKK_JISYO.seikana
-$ cat tmp.seikana | skkdic-sort >> SKK_JISYO.seikana
+# 字音
+cat header.txt > SKK_JISYO.jion
+cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK_JISYO.jion
 ```
 
-カレントディレクトリに辞書ができる。
+カレントディレクトリに辞書ができます。
 
 ```console
 $ ls SKK_JISYO.*
-SKK_JISYO.seikana  SKK_JISYO.shikakugoma
+SKK_JISYO.wiktionary  SKK_JISYO.jion  SKK_JISYO.shikakugoma
 ```
 
 wikitionaryに適切な情報が載ってないものもあるので `output.log` にはそれらの情報が出力されている。
@@ -176,13 +204,12 @@ $ head output.log
 鉃: no match
 ```
 
-後片付けしておく
 
 ``` console
-$ rm tmp.* ids.txt
+$ rm tmp.shikakugoma tmp.jion ids.txt
 ```
 
 # Future Work
 
 * 自動更新
-* 正假名の熟語対応
+* 例外辞書の整備

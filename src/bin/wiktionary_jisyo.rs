@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -6,8 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use xml_xtract::articles;
 use xml_xtract::seikana::entry::Entry;
-use xml_xtract::seikana::exception::{read_exceptions as read_exception_file, Exception};
-use xml_xtract::seikana::mapping::{read_mapping, Mapping};
+use xml_xtract::seikana::mapping::{read_mapping, MappingIndex};
 use xml_xtract::seikana::wiktionary::{
     kanji_word_entries, parse_japanese_page, to_entry, wiktionary_entries, EntrySource,
     JapanesePage, WiktionaryEntry,
@@ -17,6 +16,7 @@ use xml_xtract::seikana::wiktionary::{
 mod tests {
     use super::*;
     use std::fs;
+    use xml_xtract::seikana::mapping::Mapping;
 
     fn write_temp(name: &str, contents: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("xml-xtract-{name}"));
@@ -30,7 +30,6 @@ mod tests {
             xml: "dump.xml".into(),
             mapping: "mapping.tsv".into(),
             output: "out".into(),
-            exceptions: Some("exceptions.tsv".into()),
             report: Some("report.tsv".into()),
             source: Source::Kanji,
             seikana_output: None,
@@ -57,21 +56,16 @@ mod tests {
     }
 
     #[test]
-    fn reads_optional_exceptions() {
-        let path = write_temp("no-exceptions", "");
-        assert!(read_exceptions(&None).unwrap().is_empty());
-        assert!(read_exceptions(&Some(path)).unwrap().is_empty());
-    }
-
-    #[test]
     fn writes_report() {
         let path = write_temp("report", "");
         let report = Report {
             pages: 1,
             entries: 2,
             kanji_entries: 1,
+            noun_entries: 0,
             wago_entries: 1,
-            excluded: 0,
+            seikana_entries: 3,
+            shared_entries: 1,
             invalid_pages: 0,
             kanjitabs: 0,
             noun_readings: 0,
@@ -79,6 +73,8 @@ mod tests {
         write_report(path.clone(), &report).unwrap();
         let contents = fs::read_to_string(path).unwrap();
         assert!(contents.contains("entries\t2"));
+        assert!(contents.contains("seikana_entries\t3"));
+        assert!(contents.contains("shared_entries\t1"));
     }
 
     #[test]
@@ -99,9 +95,10 @@ mod tests {
                 historical: "かう".into(),
             },
         ];
+        let mappings = MappingIndex::new(&mappings);
         let (_, converted, seikana) = page_entries(&page, &mappings, Source::All);
-        assert_eq!(converted, vec![Entry::new("がくかう", "学校")]);
-        assert_eq!(seikana, converted);
+        assert_eq!(converted, vec![Entry::new("がっこう", "学校")]);
+        assert_eq!(seikana, vec![Entry::new("がくかう", "学校")]);
     }
 }
 
@@ -128,7 +125,6 @@ struct Options {
     xml: PathBuf,
     mapping: PathBuf,
     output: PathBuf,
-    exceptions: Option<PathBuf>,
     report: Option<PathBuf>,
     source: Source,
     seikana_output: Option<PathBuf>,
@@ -140,8 +136,10 @@ struct Report {
     pages: usize,
     entries: usize,
     kanji_entries: usize,
+    noun_entries: usize,
     wago_entries: usize,
-    excluded: usize,
+    seikana_entries: usize,
+    shared_entries: usize,
     invalid_pages: usize,
     kanjitabs: usize,
     noun_readings: usize,
@@ -154,7 +152,7 @@ struct Dictionary {
 }
 
 impl Dictionary {
-    fn from_entries(entries: &[Entry]) -> Self {
+    fn from_entries<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> Self {
         let mut dictionary = Self::default();
         for entry in entries {
             if entry
@@ -189,8 +187,8 @@ impl Dictionary {
 fn usage(code: ExitCode) -> ExitCode {
     eprintln!(
         "Usage: wiktionary_jisyo --xml XML --mapping MAPPING --output OUTPUT \
-         [--exceptions EXCEPTIONS] [--report REPORT] [--source all|kanji|wago] \
-         [--dry-run]"
+         [--report REPORT] [--source all|kanji|wago] \
+         [--seikana-output SEIKANA_OUTPUT] [--dry-run]"
     );
     code
 }
@@ -232,7 +230,6 @@ fn parse_args() -> Result<Options, ExitCode> {
         xml: required("--xml")?,
         mapping: required("--mapping")?,
         output: required("--output")?,
-        exceptions: values.get("--exceptions").map(PathBuf::from),
         report: values.get("--report").map(PathBuf::from),
         source,
         seikana_output,
@@ -240,32 +237,29 @@ fn parse_args() -> Result<Options, ExitCode> {
     })
 }
 
-fn read_exceptions(path: &Option<PathBuf>) -> io::Result<Vec<Exception>> {
-    match path {
-        Some(path) => read_exception_file(path),
-        None => Ok(Vec::new()),
-    }
-}
+type EntryKey = (String, Vec<String>);
 
-fn exception_matches(exception: &Exception, page: &JapanesePage, modern: &str) -> bool {
-    exception.candidate() == page.title && exception.modern() == modern
+fn entry_key(entry: &Entry) -> EntryKey {
+    (entry.reading.clone(), entry.candidates.clone())
 }
 
 fn page_entries(
     page: &JapanesePage,
-    mappings: &[Mapping],
+    mappings: &MappingIndex,
     source: Source,
 ) -> (Vec<WiktionaryEntry>, Vec<Entry>, Vec<Entry>) {
     let mut words = Vec::new();
     let mut seikana_entries = Vec::new();
     if source != Source::Wago {
-        for entry in kanji_word_entries(page, mappings).0 {
+        let (entries, page_seikana_entries, _errors) = kanji_word_entries(page, mappings);
+        seikana_entries.extend(page_seikana_entries);
+        for entry in entries {
             words.push(WiktionaryEntry {
                 reading: entry.reading.clone(),
                 candidate: entry.candidates.join("/"),
+                suru: false,
                 source: EntrySource::KanjiWord,
             });
-            seikana_entries.push(entry);
         }
     }
     if source != Source::Kanji {
@@ -289,10 +283,9 @@ fn main() -> ExitCode {
 }
 
 fn run(options: Options) -> io::Result<()> {
-    let mappings = read_mapping(&options.mapping)?;
-    let exceptions = read_exceptions(&options.exceptions)?;
-    let mut output_entries = Vec::new();
-    let mut seikana_entries = Vec::new();
+    let mappings = MappingIndex::new(&read_mapping(&options.mapping)?);
+    let mut output_entries = BTreeMap::<EntryKey, Entry>::new();
+    let mut seikana_entries = BTreeMap::<EntryKey, Entry>::new();
     let mut report = Report::default();
 
     for page in articles(&options.xml) {
@@ -306,56 +299,43 @@ fn run(options: Options) -> io::Result<()> {
         report.noun_readings += page.noun_readings.len();
         let (entries, converted, page_seikana_entries) =
             page_entries(&page, &mappings, options.source);
-        let page_seikana_entries = page_seikana_entries
-            .into_iter()
-            .filter(|entry| {
-                !exceptions
-                    .iter()
-                    .any(|exception| exception_matches(exception, &page, &entry.reading))
-            })
-            .collect::<Vec<_>>();
-        seikana_entries.extend(page_seikana_entries);
-        for entry in converted {
-            if exceptions
-                .iter()
-                .any(|exception| exception_matches(exception, &page, &entry.reading))
-            {
-                report.excluded += 1;
-                continue;
-            }
-            output_entries.push(entry);
+        for entry in page_seikana_entries {
+            seikana_entries.insert(entry_key(&entry), entry);
         }
         report.kanji_entries += entries
             .iter()
             .filter(|entry| entry.source == EntrySource::KanjiWord)
             .count();
+        report.noun_entries += entries
+            .iter()
+            .filter(|entry| entry.source == EntrySource::Noun)
+            .count();
         report.wago_entries += entries
             .iter()
             .filter(|entry| {
-                entry.source == EntrySource::WagoOkuri || entry.source == EntrySource::Suru
+                entry.source == EntrySource::WagoOkuri
+                    || entry.source == EntrySource::Suru
+                    || entry.source == EntrySource::SuruNoun
             })
             .count();
+        for entry in converted {
+            output_entries.insert(entry_key(&entry), entry);
+        }
     }
 
-    output_entries.sort_by(|left, right| {
-        left.reading
-            .cmp(&right.reading)
-            .then_with(|| left.candidates.join("/").cmp(&right.candidates.join("/")))
-    });
-    output_entries.dedup();
     report.entries = output_entries.len();
-    let dictionary = Dictionary::from_entries(&output_entries);
+    let dictionary = Dictionary::from_entries(output_entries.values());
     if !options.dry_run {
         dictionary.write_to(&options.output)?;
     }
 
-    seikana_entries.sort_by(|left, right| {
-        left.reading
-            .cmp(&right.reading)
-            .then_with(|| left.candidates.join("/").cmp(&right.candidates.join("/")))
-    });
-    seikana_entries.dedup();
-    let seikana_dictionary = Dictionary::from_entries(&seikana_entries);
+    report.seikana_entries = seikana_entries.len();
+    report.shared_entries = seikana_entries
+        .keys()
+        .filter(|key| output_entries.contains_key(*key))
+        .count();
+    seikana_entries.retain(|key, _| !output_entries.contains_key(key));
+    let seikana_dictionary = Dictionary::from_entries(seikana_entries.values());
     if let Some(path) = options.seikana_output {
         seikana_dictionary.write_to(&path)?;
     }
@@ -374,8 +354,10 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "pages\t{}", report.pages)?;
     writeln!(writer, "entries\t{}", report.entries)?;
     writeln!(writer, "kanji_entries\t{}", report.kanji_entries)?;
+    writeln!(writer, "noun_entries\t{}", report.noun_entries)?;
     writeln!(writer, "wago_entries\t{}", report.wago_entries)?;
-    writeln!(writer, "excluded\t{}", report.excluded)?;
+    writeln!(writer, "seikana_entries\t{}", report.seikana_entries)?;
+    writeln!(writer, "shared_entries\t{}", report.shared_entries)?;
     writeln!(writer, "invalid_pages\t{}", report.invalid_pages)?;
     writeln!(writer, "kanjitabs\t{}", report.kanjitabs)?;
     writeln!(writer, "noun_readings\t{}", report.noun_readings)?;
