@@ -24,6 +24,7 @@ pub struct JapanesePage {
     pub suru_readings: Vec<String>,
     pub noun_suru_readings: Vec<String>,
     pub old_japanese_titles: Vec<String>,
+    pub kangokana_candidates: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +85,7 @@ pub enum EntrySource {
     WagoOkuri,
     Suru,
     SuruNoun,
+    Kangokana,
 }
 
 fn default_sort_bodies(text: &str) -> Vec<String> {
@@ -458,6 +460,8 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
+    page.kangokana_candidates = kangokana_candidates(text);
+
     page
 }
 
@@ -480,6 +484,68 @@ fn extract_bracket_titles(body: &str) -> Vec<String> {
         cursor = start + end + "】".len();
     }
     titles
+}
+
+fn kangokana_candidate_bodies(text: &str) -> Vec<&str> {
+    let mut bodies = Vec::new();
+    let marker = "{{ja-kangokana}}";
+    let mut cursor = 0;
+    while let Some(offset) = text[cursor..].find(marker) {
+        let start = cursor + offset + marker.len();
+        let end = text[start..]
+            .find("\n==")
+            .map(|offset| start + offset)
+            .unwrap_or(text.len());
+        bodies.push(&text[start..end]);
+        cursor = end;
+    }
+    bodies
+}
+
+fn kangokana_page_bodies(text: &str) -> Vec<&str> {
+    let mut bodies = Vec::new();
+    let marker = "{{ja-kangokana|";
+    let mut cursor = 0;
+    while let Some(offset) = text[cursor..].find(marker) {
+        let start = cursor + offset + marker.len();
+        let Some(end) = text[start..].find("}}") else {
+            break;
+        };
+        bodies.push(&text[start..start + end]);
+        cursor = start + end + "}}".len();
+    }
+    bodies
+}
+
+fn kangokana_candidates(text: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    let mut add_candidate = |candidate: String| {
+        if candidate.chars().all(is_kanji) && !candidates.contains(&candidate) {
+            candidates.push(candidate);
+        }
+    };
+    for body in kangokana_candidate_bodies(text) {
+        for title in extract_bracket_titles(body) {
+            add_candidate(title);
+        }
+    }
+    for body in kangokana_page_bodies(text) {
+        for param in split_params(body) {
+            if param.contains('=') {
+                continue;
+            }
+            add_candidate(clean_wikitext(param));
+        }
+    }
+    for body in template_bodies(text, "ja-k") {
+        for param in split_params(body).into_iter() {
+            if param.contains('=') {
+                continue;
+            }
+            add_candidate(clean_wikitext(param));
+        }
+    }
+    candidates
 }
 
 pub fn matched_readings(page: &JapanesePage) -> Vec<String> {
@@ -608,6 +674,17 @@ pub fn kanji_word_entries(
 
 pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     let mut entries = Vec::new();
+    if kana_only(&page.title) {
+        for candidate in &page.kangokana_candidates {
+            entries.push(WiktionaryEntry {
+                reading: page.title.clone(),
+                candidate: candidate.clone(),
+                suru: false,
+                source: EntrySource::Kangokana,
+            });
+        }
+    }
+
     if page.title.chars().any(is_kanji) {
         for reading in page.default_sorts.iter().filter(|reading| {
             !page.wagokanji_readings.contains(reading)
@@ -875,6 +952,44 @@ mod tests {
     fn parses_wagokanji() {
         let page = parse_japanese_page("歩く", "{{ja-wagokanji|あるく}}");
         assert_eq!(page.wagokanji_readings, vec!["あるく".to_string()]);
+    }
+
+    #[test]
+    fn parses_kangokana_candidates() {
+        let page = parse_japanese_page(
+            "こうもん",
+            "{{ja-kangokana}}\n*【[[公門]]】説明\n*【[[孔門]]】説明",
+        );
+        assert_eq!(page.kangokana_candidates, vec!["公門", "孔門"]);
+        assert_eq!(
+            wiktionary_entries(&page),
+            vec![
+                WiktionaryEntry {
+                    reading: "こうもん".into(),
+                    candidate: "公門".into(),
+                    suru: false,
+                    source: EntrySource::Kangokana,
+                },
+                WiktionaryEntry {
+                    reading: "こうもん".into(),
+                    candidate: "孔門".into(),
+                    suru: false,
+                    source: EntrySource::Kangokana,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_kangokana_page_template_candidate() {
+        let page = parse_japanese_page("とりどく", "{{ja-kangokana|とりどく}}");
+        assert!(page.kangokana_candidates.is_empty());
+    }
+
+    #[test]
+    fn parses_ja_k_candidates() {
+        let page = parse_japanese_page("しかく", "{{ja-kangokana}}\n{{ja-k|歯革|t=象牙}}");
+        assert_eq!(page.kangokana_candidates, vec!["歯革"]);
     }
 
     #[test]
