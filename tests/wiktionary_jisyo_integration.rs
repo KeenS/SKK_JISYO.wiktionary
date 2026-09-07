@@ -76,8 +76,6 @@ fn converts_wiktionary_fixture_end_to_end() {
         .arg("tests/fixtures/wiktionary_jisyo.xml")
         .arg("--mapping")
         .arg("tests/fixtures/wiktionary_jisyo_mapping.tsv")
-        .arg("--exceptions")
-        .arg("tests/fixtures/wiktionary_jisyo_exceptions.tsv")
         .arg("--jion-output")
         .arg(&jion_output)
         .arg("--output")

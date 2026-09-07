@@ -64,6 +64,7 @@ mod tests {
             kanji_entries: 1,
             noun_entries: 0,
             wago_entries: 1,
+            idiom_entries: 0,
             jion_entries: 3,
             shared_entries: 1,
             invalid_pages: 0,
@@ -138,6 +139,7 @@ struct Report {
     kanji_entries: usize,
     noun_entries: usize,
     wago_entries: usize,
+    idiom_entries: usize,
     jion_entries: usize,
     shared_entries: usize,
     invalid_pages: usize,
@@ -289,12 +291,12 @@ fn run(options: Options) -> io::Result<()> {
     let mut report = Report::default();
 
     for page in articles(&options.xml) {
-        let Some(text) = page.japanese_text() else {
+        let Some(text) = page.japanese_text_with_default_sort() else {
             report.invalid_pages += 1;
             continue;
         };
         report.pages += 1;
-        let page = parse_japanese_page(page.title.as_str(), text);
+        let page = parse_japanese_page(page.title.as_str(), &text);
         report.kanjitabs += page.kanjitabs.len();
         report.noun_readings += page.noun_readings.len();
         let (entries, converted, page_jion_entries) =
@@ -317,6 +319,10 @@ fn run(options: Options) -> io::Result<()> {
                     || entry.source == EntrySource::Suru
                     || entry.source == EntrySource::SuruNoun
             })
+            .count();
+        report.idiom_entries += entries
+            .iter()
+            .filter(|entry| entry.source == EntrySource::Idiom)
             .count();
         for entry in converted {
             output_entries.insert(entry_key(&entry), entry);
@@ -356,6 +362,7 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "kanji_entries\t{}", report.kanji_entries)?;
     writeln!(writer, "noun_entries\t{}", report.noun_entries)?;
     writeln!(writer, "wago_entries\t{}", report.wago_entries)?;
+    writeln!(writer, "idiom_entries\t{}", report.idiom_entries)?;
     writeln!(writer, "jion_entries\t{}", report.jion_entries)?;
     writeln!(writer, "shared_entries\t{}", report.shared_entries)?;
     writeln!(writer, "invalid_pages\t{}", report.invalid_pages)?;
