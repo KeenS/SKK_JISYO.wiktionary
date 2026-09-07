@@ -180,8 +180,8 @@ pub fn restore_modern(conversion: &Conversion) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::seikana::mapping::Mapping;
-    use crate::seikana::segmentation::{segment, Segmentation};
+    use crate::jion::mapping::Mapping;
+    use crate::jion::segmentation::{segment, Segmentation};
 
     fn mappings() -> Vec<Mapping> {
         vec![

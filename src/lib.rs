@@ -5,8 +5,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+pub mod jion;
 pub mod model;
-pub mod seikana;
 
 /// Iterates `<page>` elements without deserializing the whole dump into memory.
 pub fn articles(xml_file: impl AsRef<Path>) -> impl Iterator<Item = model::Page> {

@@ -6,10 +6,10 @@ use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::process;
 
-use xml_xtract::seikana::exception::read_exceptions;
-use xml_xtract::seikana::jisyo::read_jisyo;
-use xml_xtract::seikana::jukugo::{convert_entries, ReportRow};
-use xml_xtract::seikana::mapping::read_mapping;
+use xml_xtract::jion::exception::read_exceptions;
+use xml_xtract::jion::jisyo::read_jisyo;
+use xml_xtract::jion::jukugo::{convert_entries, ReportRow};
+use xml_xtract::jion::mapping::read_mapping;
 
 struct Args {
     input: PathBuf,
@@ -22,7 +22,7 @@ struct Args {
 
 fn usage() {
     println!(
-        "Usage: seikana_jukugo --input JISYO --mapping MAPPING --output OUTPUT \
+        "Usage: jion_jukugo --input JISYO --mapping MAPPING --output OUTPUT \
          [--exceptions EXCEPTIONS] [--report REPORT] [--dry-run]"
     );
 }
@@ -89,12 +89,10 @@ mod e2e_tests {
         let output = env::temp_dir().join("xml-xtract-jukugo-e2e-output");
         let report = env::temp_dir().join("xml-xtract-jukugo-e2e-report");
         let args = Args {
-            input: PathBuf::from("tests/fixtures/seikana_jukugo_input.tsv"),
-            mapping: PathBuf::from("tests/fixtures/seikana_jukugo_mapping.tsv"),
+            input: PathBuf::from("tests/fixtures/jion_jukugo_input.tsv"),
+            mapping: PathBuf::from("tests/fixtures/jion_jukugo_mapping.tsv"),
             output: output.clone(),
-            exceptions: Some(PathBuf::from(
-                "tests/fixtures/seikana_jukugo_exceptions.tsv",
-            )),
+            exceptions: Some(PathBuf::from("tests/fixtures/jion_jukugo_exceptions.tsv")),
             report: Some(report.clone()),
             dry_run: false,
         };
@@ -164,7 +162,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use xml_xtract::seikana::jukugo::is_jukugo_candidate;
+    use xml_xtract::jion::jukugo::is_jukugo_candidate;
 
     #[test]
     fn detects_jukugo_candidates() {

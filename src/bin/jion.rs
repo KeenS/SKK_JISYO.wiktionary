@@ -5,7 +5,7 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use wana_kana::ConvertJapanese;
-use xml_xtract::seikana::mapping::Mapping;
+use xml_xtract::jion::mapping::Mapping;
 use xml_xtract::{kanji_articles, model::*};
 
 static EXTRACT_REGEX: OnceCell<Regex> = OnceCell::new();
@@ -34,7 +34,7 @@ fn extract_on(
     }
 
     if !at_least_one {
-        println!("no seikana in {}\n{}", page.title, area)
+        println!("no jion in {}\n{}", page.title, area)
     }
     Ok(())
 }
@@ -83,7 +83,7 @@ fn main() -> io::Result<()> {
         .expect("internal error: invalid regex");
     let ids_file = env::args().nth(1).expect("Usage: IDs XML");
     let xml_file = env::args().nth(2).expect("Usage: IDs XML");
-    let output = File::create("tmp.seikana")?;
+    let output = File::create("tmp.jion")?;
     let mapping_output = File::create("kanji_readings.tsv")?;
     let mut buffer = BufWriter::new(output);
     let mut mapping_buffer = BufWriter::new(mapping_output);

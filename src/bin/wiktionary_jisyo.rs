@@ -5,9 +5,9 @@ use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use xml_xtract::articles;
-use xml_xtract::seikana::entry::Entry;
-use xml_xtract::seikana::mapping::{read_mapping, MappingIndex};
-use xml_xtract::seikana::wiktionary::{
+use xml_xtract::jion::entry::Entry;
+use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
+use xml_xtract::jion::wiktionary::{
     kanji_word_entries, parse_japanese_page, to_entry, wiktionary_entries, EntrySource,
     JapanesePage, WiktionaryEntry,
 };
@@ -16,7 +16,7 @@ use xml_xtract::seikana::wiktionary::{
 mod tests {
     use super::*;
     use std::fs;
-    use xml_xtract::seikana::mapping::Mapping;
+    use xml_xtract::jion::mapping::Mapping;
 
     fn write_temp(name: &str, contents: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("xml-xtract-{name}"));
@@ -32,7 +32,7 @@ mod tests {
             output: "out".into(),
             report: Some("report.tsv".into()),
             source: Source::Kanji,
-            seikana_output: None,
+            jion_output: None,
             dry_run: true,
         };
         assert_eq!(options.source, Source::Kanji);
@@ -64,7 +64,7 @@ mod tests {
             kanji_entries: 1,
             noun_entries: 0,
             wago_entries: 1,
-            seikana_entries: 3,
+            jion_entries: 3,
             shared_entries: 1,
             invalid_pages: 0,
             kanjitabs: 0,
@@ -73,7 +73,7 @@ mod tests {
         write_report(path.clone(), &report).unwrap();
         let contents = fs::read_to_string(path).unwrap();
         assert!(contents.contains("entries\t2"));
-        assert!(contents.contains("seikana_entries\t3"));
+        assert!(contents.contains("jion_entries\t3"));
         assert!(contents.contains("shared_entries\t1"));
     }
 
@@ -96,9 +96,9 @@ mod tests {
             },
         ];
         let mappings = MappingIndex::new(&mappings);
-        let (_, converted, seikana) = page_entries(&page, &mappings, Source::All);
+        let (_, converted, jion) = page_entries(&page, &mappings, Source::All);
         assert_eq!(converted, vec![Entry::new("がっこう", "学校")]);
-        assert_eq!(seikana, vec![Entry::new("がくかう", "学校")]);
+        assert_eq!(jion, vec![Entry::new("がくかう", "学校")]);
     }
 }
 
@@ -127,7 +127,7 @@ struct Options {
     output: PathBuf,
     report: Option<PathBuf>,
     source: Source,
-    seikana_output: Option<PathBuf>,
+    jion_output: Option<PathBuf>,
     dry_run: bool,
 }
 
@@ -138,7 +138,7 @@ struct Report {
     kanji_entries: usize,
     noun_entries: usize,
     wago_entries: usize,
-    seikana_entries: usize,
+    jion_entries: usize,
     shared_entries: usize,
     invalid_pages: usize,
     kanjitabs: usize,
@@ -188,7 +188,7 @@ fn usage(code: ExitCode) -> ExitCode {
     eprintln!(
         "Usage: wiktionary_jisyo --xml XML --mapping MAPPING --output OUTPUT \
          [--report REPORT] [--source all|kanji|wago] \
-         [--seikana-output SEIKANA_OUTPUT] [--dry-run]"
+         [--jion-output SEIKANA_OUTPUT] [--dry-run]"
     );
     code
 }
@@ -198,14 +198,14 @@ fn parse_args() -> Result<Options, ExitCode> {
     let mut values = HashMap::new();
     let mut source = Source::All;
     let mut dry_run = false;
-    let mut seikana_output = None;
+    let mut jion_output = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--dry-run" => dry_run = true,
-            "--seikana-output" => {
+            "--jion-output" => {
                 let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
-                seikana_output = Some(PathBuf::from(value));
+                jion_output = Some(PathBuf::from(value));
             }
             "--source" => {
                 let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
@@ -232,7 +232,7 @@ fn parse_args() -> Result<Options, ExitCode> {
         output: required("--output")?,
         report: values.get("--report").map(PathBuf::from),
         source,
-        seikana_output,
+        jion_output,
         dry_run,
     })
 }
@@ -249,10 +249,10 @@ fn page_entries(
     source: Source,
 ) -> (Vec<WiktionaryEntry>, Vec<Entry>, Vec<Entry>) {
     let mut words = Vec::new();
-    let mut seikana_entries = Vec::new();
+    let mut jion_entries = Vec::new();
     if source != Source::Wago {
-        let (entries, page_seikana_entries, _errors) = kanji_word_entries(page, mappings);
-        seikana_entries.extend(page_seikana_entries);
+        let (entries, page_jion_entries, _errors) = kanji_word_entries(page, mappings);
+        jion_entries.extend(page_jion_entries);
         for entry in entries {
             words.push(WiktionaryEntry {
                 reading: entry.reading.clone(),
@@ -266,7 +266,7 @@ fn page_entries(
         words.extend(wiktionary_entries(page));
     }
     let entries = words.iter().map(to_entry).collect();
-    (words, entries, seikana_entries)
+    (words, entries, jion_entries)
 }
 
 fn main() -> ExitCode {
@@ -285,7 +285,7 @@ fn main() -> ExitCode {
 fn run(options: Options) -> io::Result<()> {
     let mappings = MappingIndex::new(&read_mapping(&options.mapping)?);
     let mut output_entries = BTreeMap::<EntryKey, Entry>::new();
-    let mut seikana_entries = BTreeMap::<EntryKey, Entry>::new();
+    let mut jion_entries = BTreeMap::<EntryKey, Entry>::new();
     let mut report = Report::default();
 
     for page in articles(&options.xml) {
@@ -297,10 +297,10 @@ fn run(options: Options) -> io::Result<()> {
         let page = parse_japanese_page(page.title.as_str(), text);
         report.kanjitabs += page.kanjitabs.len();
         report.noun_readings += page.noun_readings.len();
-        let (entries, converted, page_seikana_entries) =
+        let (entries, converted, page_jion_entries) =
             page_entries(&page, &mappings, options.source);
-        for entry in page_seikana_entries {
-            seikana_entries.insert(entry_key(&entry), entry);
+        for entry in page_jion_entries {
+            jion_entries.insert(entry_key(&entry), entry);
         }
         report.kanji_entries += entries
             .iter()
@@ -329,15 +329,15 @@ fn run(options: Options) -> io::Result<()> {
         dictionary.write_to(&options.output)?;
     }
 
-    report.seikana_entries = seikana_entries.len();
-    report.shared_entries = seikana_entries
+    report.jion_entries = jion_entries.len();
+    report.shared_entries = jion_entries
         .keys()
         .filter(|key| output_entries.contains_key(*key))
         .count();
-    seikana_entries.retain(|key, _| !output_entries.contains_key(key));
-    let seikana_dictionary = Dictionary::from_entries(seikana_entries.values());
-    if let Some(path) = options.seikana_output {
-        seikana_dictionary.write_to(&path)?;
+    jion_entries.retain(|key, _| !output_entries.contains_key(key));
+    let jion_dictionary = Dictionary::from_entries(jion_entries.values());
+    if let Some(path) = options.jion_output {
+        jion_dictionary.write_to(&path)?;
     }
 
     if let Some(report_path) = options.report {
@@ -356,7 +356,7 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "kanji_entries\t{}", report.kanji_entries)?;
     writeln!(writer, "noun_entries\t{}", report.noun_entries)?;
     writeln!(writer, "wago_entries\t{}", report.wago_entries)?;
-    writeln!(writer, "seikana_entries\t{}", report.seikana_entries)?;
+    writeln!(writer, "jion_entries\t{}", report.jion_entries)?;
     writeln!(writer, "shared_entries\t{}", report.shared_entries)?;
     writeln!(writer, "invalid_pages\t{}", report.invalid_pages)?;
     writeln!(writer, "kanjitabs\t{}", report.kanjitabs)?;

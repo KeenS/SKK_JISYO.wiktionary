@@ -68,7 +68,7 @@ fn parser_continues_after_empty_text_element() {
 #[test]
 fn converts_wiktionary_fixture_end_to_end() {
     let output = std::env::temp_dir().join("xml-xtract-wiktionary-jisyo-output");
-    let seikana_output = std::env::temp_dir().join("xml-xtract-wiktionary-jisyo-seikana-output");
+    let jion_output = std::env::temp_dir().join("xml-xtract-wiktionary-jisyo-jion-output");
     let report = std::env::temp_dir().join("xml-xtract-wiktionary-jisyo-report");
 
     let status = Command::new(env!("CARGO_BIN_EXE_wiktionary_jisyo"))
@@ -78,8 +78,8 @@ fn converts_wiktionary_fixture_end_to_end() {
         .arg("tests/fixtures/wiktionary_jisyo_mapping.tsv")
         .arg("--exceptions")
         .arg("tests/fixtures/wiktionary_jisyo_exceptions.tsv")
-        .arg("--seikana-output")
-        .arg(&seikana_output)
+        .arg("--jion-output")
+        .arg(&jion_output)
         .arg("--output")
         .arg(&output)
         .arg("--report")
@@ -97,22 +97,22 @@ fn converts_wiktionary_fixture_end_to_end() {
     assert!(output_text.contains("あるk /歩/"));
     assert!(!output_text.contains("かんする /緘する/"));
 
-    let seikana_output_text = fs::read_to_string(&seikana_output).unwrap();
-    assert!(seikana_output_text.contains(";; okuri-ari entries."));
-    assert!(seikana_output_text.contains(";; okuri-nasi entries."));
-    assert!(seikana_output_text.contains("がくかう /学校/"));
-    assert!(!seikana_output_text.contains("あるk /歩/"));
-    assert!(!seikana_output_text.contains("いどう /移動/する/"));
+    let jion_output_text = fs::read_to_string(&jion_output).unwrap();
+    assert!(jion_output_text.contains(";; okuri-ari entries."));
+    assert!(jion_output_text.contains(";; okuri-nasi entries."));
+    assert!(jion_output_text.contains("がくかう /学校/"));
+    assert!(!jion_output_text.contains("あるk /歩/"));
+    assert!(!jion_output_text.contains("いどう /移動/する/"));
 
     let report_text = fs::read_to_string(&report).unwrap();
     assert!(report_text.contains("metric\tcount"));
     assert!(report_text.contains("pages\t4"));
-    assert!(report_text.contains("seikana_entries\t1"));
+    assert!(report_text.contains("jion_entries\t1"));
     assert!(report_text.contains("shared_entries\t0"));
     assert!(report_text.contains("invalid_pages\t1"));
 
     fs::remove_file(output).unwrap();
-    fs::remove_file(seikana_output).unwrap();
+    fs::remove_file(jion_output).unwrap();
     fs::remove_file(report).unwrap();
 }
 

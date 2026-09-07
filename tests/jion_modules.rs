@@ -1,9 +1,9 @@
-use xml_xtract::seikana::entry::Entry;
-use xml_xtract::seikana::jisyo::{parse_line, read_jisyo, write_jisyo};
-use xml_xtract::seikana::mapping::{
+use xml_xtract::jion::entry::Entry;
+use xml_xtract::jion::jisyo::{parse_line, read_jisyo, write_jisyo};
+use xml_xtract::jion::mapping::{
     parse_line as parse_mapping, read_mapping, to_index, write_mapping, Mapping,
 };
-use xml_xtract::seikana::segmentation::{segment, Segmentation};
+use xml_xtract::jion::segmentation::{segment, Segmentation};
 
 #[test]
 fn parses_jisyo_entry() {

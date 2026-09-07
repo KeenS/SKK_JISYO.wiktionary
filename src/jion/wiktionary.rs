@@ -453,12 +453,12 @@ pub fn kanji_word_entries(
     mappings: &MappingIndex,
 ) -> (Vec<Entry>, Vec<Entry>, Vec<(String, KanjiWordError)>) {
     let mut entries = Vec::new();
-    let mut seikana_entries = Vec::new();
+    let mut jion_entries = Vec::new();
     let mut errors = Vec::new();
     for word in kanji_words(page, mappings) {
         entries.push(Entry::new(word.reading.clone(), word.candidate.clone()));
         if let Some(entry) = convert_kanji_word(&word) {
-            seikana_entries.push(entry);
+            jion_entries.push(entry);
         } else {
             errors.push((word.candidate.clone(), KanjiWordError::RestoreFailed));
         }
@@ -468,7 +468,7 @@ pub fn kanji_word_entries(
     } else if entries.is_empty() && errors.is_empty() {
         errors.push((page.title.clone(), KanjiWordError::MappingNotFound));
     }
-    (entries, seikana_entries, errors)
+    (entries, jion_entries, errors)
 }
 
 pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
@@ -622,7 +622,7 @@ fn okuri_romaji(ch: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::seikana::mapping::Mapping;
+    use crate::jion::mapping::Mapping;
 
     #[test]
     fn parses_kanjitab_with_override() {
@@ -857,10 +857,10 @@ mod tests {
             "学校",
             "{{ja-kanjitab|がく|k1=がっ|こう|yomi=o}}{{ja-noun|がっこう}}",
         );
-        let (entries, seikana_entries, errors) = kanji_word_entries(&page, &mappings());
+        let (entries, jion_entries, errors) = kanji_word_entries(&page, &mappings());
         assert!(errors.is_empty());
         assert_eq!(entries, vec![Entry::new("がっこう", "学校")]);
-        assert_eq!(seikana_entries, vec![Entry::new("がっかう", "学校")]);
+        assert_eq!(jion_entries, vec![Entry::new("がっかう", "学校")]);
     }
 
     #[test]

@@ -6,13 +6,13 @@ fn converts_fixture_dictionary_end_to_end() {
     let output = std::env::temp_dir().join("xml-xtract-jukugo-integration-output");
     let report = std::env::temp_dir().join("xml-xtract-jukugo-integration-report");
 
-    let status = Command::new(env!("CARGO_BIN_EXE_seikana_jukugo"))
+    let status = Command::new(env!("CARGO_BIN_EXE_jion_jukugo"))
         .arg("--input")
-        .arg("tests/fixtures/seikana_jukugo_input.tsv")
+        .arg("tests/fixtures/jion_jukugo_input.tsv")
         .arg("--mapping")
-        .arg("tests/fixtures/seikana_jukugo_mapping.tsv")
+        .arg("tests/fixtures/jion_jukugo_mapping.tsv")
         .arg("--exceptions")
-        .arg("tests/fixtures/seikana_jukugo_exceptions.tsv")
+        .arg("tests/fixtures/jion_jukugo_exceptions.tsv")
         .arg("--output")
         .arg(&output)
         .arg("--report")
@@ -41,11 +41,11 @@ fn converts_yoon_jukugo_from_all_kanji_fixture() {
     let output = std::env::temp_dir().join("xml-xtract-jukugo-yoon-output");
     let report = std::env::temp_dir().join("xml-xtract-jukugo-yoon-report");
 
-    let status = Command::new(env!("CARGO_BIN_EXE_seikana_jukugo"))
+    let status = Command::new(env!("CARGO_BIN_EXE_jion_jukugo"))
         .arg("--input")
-        .arg("tests/fixtures/seikana_jukugo_all_kanji_input.tsv")
+        .arg("tests/fixtures/jion_jukugo_all_kanji_input.tsv")
         .arg("--mapping")
-        .arg("tests/fixtures/seikana_jukugo_mapping.tsv")
+        .arg("tests/fixtures/jion_jukugo_mapping.tsv")
         .arg("--output")
         .arg(&output)
         .arg("--report")
@@ -70,11 +70,11 @@ fn dry_run_does_not_write_dictionary() {
     let report = std::env::temp_dir().join("xml-xtract-jukugo-dry-run-report");
     let _ = fs::remove_file(&output);
 
-    let status = Command::new(env!("CARGO_BIN_EXE_seikana_jukugo"))
+    let status = Command::new(env!("CARGO_BIN_EXE_jion_jukugo"))
         .arg("--input")
-        .arg("tests/fixtures/seikana_jukugo_input.tsv")
+        .arg("tests/fixtures/jion_jukugo_input.tsv")
         .arg("--mapping")
-        .arg("tests/fixtures/seikana_jukugo_mapping.tsv")
+        .arg("tests/fixtures/jion_jukugo_mapping.tsv")
         .arg("--output")
         .arg(&output)
         .arg("--report")

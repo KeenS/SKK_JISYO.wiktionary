@@ -81,22 +81,22 @@ generate() {
         docker stop wiktionary
         echo "Generating prototype of dictionaries"
         cargo run --release --bin shikakugoma ids.txt "$ARTICLES" > output_shikakugoma.log
-        cargo run --release --bin seikana ids.txt "$ARTICLES" > output_seikana.log
+        cargo run --release --bin jion ids.txt "$ARTICLES" > output_jion.log
         echo "Generating Wiktionary dictionary"
         cargo run --release --bin wiktionary_jisyo -- \
             --xml "$ARTICLES" \
             --mapping kanji_readings.tsv \
             --output tmp.wiktionary \
-            --seikana-output tmp.wiktionary.seikana \
+            --jion-output tmp.wiktionary.jion \
             --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
         cat header.txt > SKK_JISYO.shikakugoma
         cat tmp.shikakugoma | skkdic-sort >> SKK_JISYO.shikakugoma
         cat header.txt > SKK_JISYO.wiktionary
         cat tmp.wiktionary | skkdic-sort >> SKK_JISYO.wiktionary
-        echo "Generating seikana dictionary"
-        cat header.txt > SKK_JISYO.seikana
-        cat tmp.seikana tmp.wiktionary.seikana | skkdic-sort >> SKK_JISYO.seikana
+        echo "Generating jion dictionary"
+        cat header.txt > SKK_JISYO.jion
+        cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK_JISYO.jion
         echo "Cleaning up"
         rm tmp.* ids.txt
     )
