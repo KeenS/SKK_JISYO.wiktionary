@@ -147,6 +147,9 @@ $ docker stop wiktionary
 
 ### 辞書生成
 
+四角号碼と字音のデータを生成する
+
+
 ```console
 # 四角号碼辞書と漢字読み対応表
 $ cargo run --release --bin shikakugoma ids.txt jawiktionary-*-pages-articles.xml > output.log
@@ -156,7 +159,7 @@ $ cargo run --release --bin jion ids.txt jawiktionary-*-pages-articles.xml >> ou
 辞書や対応表などを生成する
 
 ``` console
-$  cargo run --release --bin wiktionary_jisyo -- \
+$ cargo run --release --bin wiktionary_jisyo -- \
      --xml jawiktionary-*-pages-articles.xml \
      --mapping kanji_readings.tsv \
      --output tmp.wiktionary \
@@ -164,7 +167,7 @@ $  cargo run --release --bin wiktionary_jisyo -- \
      --report wiktionary-jisyo-report.tsv
 ```
 
-このデータは正しくソートされていないので `skkdic-sort` を使ってソートします。
+このデータは正しくソートされていないので `skkdic-sort` を使ってソートする。
 
 ``` console
 # wiktionary辞書
