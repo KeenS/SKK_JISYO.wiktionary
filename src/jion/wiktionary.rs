@@ -25,6 +25,7 @@ pub struct JapanesePage {
     pub noun_suru_readings: Vec<String>,
     pub old_japanese_titles: Vec<String>,
     pub kangokana_candidates: Vec<String>,
+    pub new_style_variants: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -461,6 +462,7 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
     }
 
     page.kangokana_candidates = kangokana_candidates(text);
+    page.new_style_variants = new_style_variants(text);
 
     page
 }
@@ -546,6 +548,39 @@ fn kangokana_candidates(text: &str) -> Vec<String> {
         }
     }
     candidates
+}
+
+fn new_style_variant_bodies(text: &str) -> Vec<&str> {
+    let mut bodies = Vec::new();
+    let marker = "{{kanji variants|";
+    let mut cursor = 0;
+    while let Some(offset) = text[cursor..].find(marker) {
+        let start = cursor + offset + marker.len();
+        let Some(end) = text[start..].find("}}") else {
+            break;
+        };
+        bodies.push(&text[start..start + end]);
+        cursor = start + end + "}}".len();
+    }
+    bodies
+}
+
+fn new_style_variants(text: &str) -> Vec<String> {
+    let mut variants = Vec::new();
+    for body in new_style_variant_bodies(text) {
+        for param in split_params(body) {
+            let Some((candidate, labels)) = param.split_once('=') else {
+                continue;
+            };
+            if labels.contains("新字体") {
+                let candidate = clean_wikitext(candidate);
+                if candidate.chars().all(is_kanji) && !variants.contains(&candidate) {
+                    variants.push(candidate);
+                }
+            }
+        }
+    }
+    variants
 }
 
 pub fn matched_readings(page: &JapanesePage) -> Vec<String> {

@@ -48,6 +48,16 @@ pub fn kanji_template_params(text: &str) -> Option<&str> {
         .map(|params| params.as_str())
 }
 
+pub fn has_on_reading(text: &str, reading: &str) -> bool {
+    let Some(params) = kanji_template_params(text) else {
+        return false;
+    };
+    let reading = reading.to_hiragana();
+    parse_on_readings(params)
+        .iter()
+        .any(|candidate| candidate.modern == reading)
+}
+
 pub fn parse_on_readings(params: &str) -> Vec<OnReading> {
     let mut readings = Vec::new();
     for captures in on_reading_regex().captures_iter(params) {

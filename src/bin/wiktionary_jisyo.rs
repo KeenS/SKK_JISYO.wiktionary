@@ -4,9 +4,11 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use wana_kana::ConvertJapanese;
 use xml_xtract::articles;
 use xml_xtract::jion::entry::Entry;
 use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
+use xml_xtract::jion::on_reading::has_on_reading;
 use xml_xtract::jion::wiktionary::{
     kanji_word_entries, parse_japanese_page, to_entry, wiktionary_entries, EntrySource,
     JapanesePage, WiktionaryEntry,
@@ -81,6 +83,8 @@ mod tests {
 
     #[test]
     fn converts_kanji_pages() {
+        use xml_xtract::model::{Page, Revision};
+
         let page = parse_japanese_page(
             "学校",
             "=={{ja}}==\n{{ja-kanjitab|がく|こう}}\n{{ja-noun|がっこう}}",
@@ -98,7 +102,17 @@ mod tests {
             },
         ];
         let mappings = MappingIndex::new(&mappings);
-        let (_, converted, jion) = page_entries(&page, &mappings, Source::All);
+        let raw_page = Page {
+            ns: 0,
+            id: 1,
+            title: "学校".into(),
+            revision: Revision {
+                id: 1,
+                comment: None,
+                text: String::new(),
+            },
+        };
+        let (_, converted, jion) = page_entries(&page, &mappings, Source::All, &raw_page);
         assert_eq!(converted, vec![Entry::new("がっこう", "学校")]);
         assert_eq!(jion, vec![Entry::new("がくかう", "学校")]);
     }
@@ -267,6 +281,7 @@ fn page_entries(
     page: &JapanesePage,
     mappings: &MappingIndex,
     source: Source,
+    raw_page: &xml_xtract::model::Page,
 ) -> (Vec<WiktionaryEntry>, Vec<Entry>, Vec<Entry>) {
     let mut words = Vec::new();
     let mut jion_entries = Vec::new();
@@ -284,9 +299,36 @@ fn page_entries(
     }
     if source != Source::Kanji {
         words.extend(wiktionary_entries(page));
+        if source == Source::All {
+            words.extend(new_style_variant_entries(page, raw_page));
+        }
     }
     let entries = words.iter().map(to_entry).collect();
     (words, entries, jion_entries)
+}
+
+fn new_style_variant_entries(
+    page: &JapanesePage,
+    raw_page: &xml_xtract::model::Page,
+) -> Vec<WiktionaryEntry> {
+    if page.new_style_variants.is_empty() {
+        return Vec::new();
+    }
+    let mut entries = Vec::new();
+    for reading in &page.default_sorts {
+        let reading = reading.to_hiragana();
+        if has_on_reading(&raw_page.revision.text, &reading) {
+            for candidate in &page.new_style_variants {
+                entries.push(WiktionaryEntry {
+                    reading: reading.clone(),
+                    candidate: candidate.clone(),
+                    suru: false,
+                    source: EntrySource::Idiom,
+                });
+            }
+        }
+    }
+    entries
 }
 
 fn main() -> ExitCode {
@@ -314,11 +356,11 @@ fn run(options: Options) -> io::Result<()> {
             continue;
         };
         report.pages += 1;
-        let page = parse_japanese_page(page.title.as_str(), &text);
-        report.kanjitabs += page.kanjitabs.len();
-        report.noun_readings += page.noun_readings.len();
+        let parsed = parse_japanese_page(page.title.as_str(), &text);
+        report.kanjitabs += parsed.kanjitabs.len();
+        report.noun_readings += parsed.noun_readings.len();
         let (entries, converted, page_jion_entries) =
-            page_entries(&page, &mappings, options.source);
+            page_entries(&parsed, &mappings, options.source, &page);
         for entry in page_jion_entries {
             jion_entries.insert(entry_key(&entry), entry);
         }
