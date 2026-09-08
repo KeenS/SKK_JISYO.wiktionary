@@ -95,6 +95,7 @@ fn converts_wiktionary_fixture_end_to_end() {
     assert!(output_text.contains("あるk /歩/"));
     assert!(!output_text.contains("かんする /緘する/"));
     assert!(output_text.contains("えん /円/"));
+    assert!(output_text.contains("たくさん /沢山/"));
 
     let jion_output_text = fs::read_to_string(&jion_output).unwrap();
     assert!(jion_output_text.contains(";; okuri-ari entries."));
@@ -105,7 +106,7 @@ fn converts_wiktionary_fixture_end_to_end() {
 
     let report_text = fs::read_to_string(&report).unwrap();
     assert!(report_text.contains("metric\tcount"));
-    assert!(report_text.contains("pages\t5"));
+    assert!(report_text.contains("pages\t6"));
     assert!(report_text.contains("jion_entries\t1"));
     assert!(report_text.contains("shared_entries\t0"));
     assert!(report_text.contains("invalid_pages\t1"));

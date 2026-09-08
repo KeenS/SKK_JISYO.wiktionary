@@ -18,7 +18,7 @@ pub fn kanji_articles(
     ids_file: impl AsRef<Path>,
     xml_file: impl AsRef<Path>,
 ) -> impl Iterator<Item = model::Page> {
-    let ids = read_ids(ids_file);
+    let ids = read_ids(ids_file).unwrap_or_else(|error| panic!("{error}"));
     PageIterator::new(xml_file)
         .filter(move |page| ids.contains(&page.id) && page.title.chars().count() == 1)
 }
@@ -260,14 +260,22 @@ fn assign_revision_field(revision: &mut RevisionData, field: FieldBuffer) {
     }
 }
 
-fn read_ids(path: impl AsRef<Path>) -> HashSet<u64> {
-    BufReader::new(File::open(path).expect("failed to open file"))
+fn read_ids(path: impl AsRef<Path>) -> Result<HashSet<u64>, String> {
+    let file = File::open(&path)
+        .map_err(|error| format!("failed to open {}: {error}", path.as_ref().display()))?;
+    BufReader::new(file)
         .lines()
-        .map(|line| {
-            line.expect("line error")
-                .trim()
-                .parse::<u64>()
-                .expect("parse error")
+        .enumerate()
+        .map(|(index, line)| {
+            let line = line
+                .map_err(|error| format!("failed to read {}: {error}", path.as_ref().display()))?;
+            line.trim().parse::<u64>().map_err(|error| {
+                format!(
+                    "invalid page id in {} line {}: {error}",
+                    path.as_ref().display(),
+                    index + 1
+                )
+            })
         })
         .collect()
 }

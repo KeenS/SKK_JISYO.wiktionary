@@ -76,7 +76,7 @@ generate() {
         # namespace 14: category
         # SELECT lt_id FROM linktarget WHERE lt_title = 0xE6BCA2E5AD97 AND lt_namespace = 14;
         # -> 90955
-        docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_target_id = 90955 ORDER BY cl_from' > ids.txt
+        docker exec -i wiktionary mysql wiktionary --skip-column-names -B -e 'SELECT cl_from FROM categorylinks WHERE cl_target_id = 90955 ORDER BY cl_from' > ids.txt
         echo "Stopping MySQL"
         docker stop wiktionary
         echo "Generating prototype of dictionaries"

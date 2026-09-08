@@ -408,7 +408,9 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    if template_bodies(text, "ja-adj").is_empty() {
+    if template_bodies(text, "ja-adj").is_empty()
+        && head_candidate_bodies(text, "形容動詞").is_empty()
+    {
         for title in extract_bracket_titles(text) {
             if !page.adjective_titles.contains(&title) {
                 page.adjective_titles.push(title);
@@ -445,6 +447,28 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
+    if !head_candidate_bodies(text, "形容動詞").is_empty() {
+        for reading in matched_readings(&page) {
+            if !page.noun_readings.contains(&reading) {
+                page.noun_readings.push(reading);
+            }
+        }
+    }
+    for body in head_candidate_bodies(text, "形容動詞") {
+        for title in extract_bracket_titles(body) {
+            if !page.adjective_titles.contains(&title) {
+                page.adjective_titles.push(title);
+            }
+        }
+    }
+    for body in head_candidate_bodies(text, "adverb") {
+        for title in extract_bracket_titles(body) {
+            if !page.adverb_titles.contains(&title) {
+                page.adverb_titles.push(title);
+            }
+        }
+    }
+
     for name in [
         "ojp-verb",
         "ojp-noun",
@@ -465,6 +489,30 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
     page.new_style_variants = new_style_variants(text);
 
     page
+}
+
+fn head_candidate_bodies<'a>(text: &'a str, part_of_speech: &str) -> Vec<&'a str> {
+    let mut bodies = Vec::new();
+    let marker = "{{head|ja|";
+    let mut cursor = 0;
+    while let Some(start) = text[cursor..].find(marker) {
+        let content_start = cursor + start + marker.len();
+        let Some(relative_end) = text[content_start..].find("}}") else {
+            break;
+        };
+        let end = content_start + relative_end;
+        let Some(candidate_end) = text[end..].find("】") else {
+            cursor = end + "}}".len();
+            continue;
+        };
+        let candidate_end = end + candidate_end + "】".len();
+        let body = &text[content_start..candidate_end];
+        if body.contains(part_of_speech) {
+            bodies.push(body);
+        }
+        cursor = candidate_end;
+    }
+    bodies
 }
 
 fn extract_bracket_titles(body: &str) -> Vec<String> {
@@ -740,7 +788,15 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     }
 
     if kana_only(&page.title) {
-        for candidate in &page.noun_candidates {
+        let adjective_kanji_words: Vec<_> = page
+            .adjective_titles
+            .iter()
+            .filter(|candidate| candidate.chars().all(is_kanji))
+            .cloned()
+            .collect();
+        let mut candidates = page.noun_candidates.clone();
+        candidates.extend(adjective_kanji_words);
+        for candidate in candidates {
             if candidate.chars().any(is_kanji) {
                 entries.push(WiktionaryEntry {
                     reading: page.title.clone(),
@@ -1174,6 +1230,16 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn parses_head_template_candidate_titles() {
+        let page = parse_japanese_page(
+            "たくさん",
+            "{{head|ja|形容動詞}}【[[沢]][[山]]】\n{{head|ja|adverb}}【[[卓]][[散]]】",
+        );
+        assert_eq!(page.adjective_titles, vec!["沢山".to_string()]);
+        assert_eq!(page.adverb_titles, vec!["卓散".to_string()]);
     }
 
     #[test]
