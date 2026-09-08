@@ -726,7 +726,9 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
                 && !page
                     .wagokanji_sources
                     .iter()
-                    .any(|source| &source.reading == *reading)
+                    .filter(|source| source.reading == **reading)
+                    .filter_map(wago_source_entry)
+                    .any(|entry| starts_with_okuri(&entry.reading, reading))
         }) {
             entries.push(WiktionaryEntry {
                 reading: reading.clone(),
@@ -855,6 +857,12 @@ fn wago_source_entry(source: &WagokanjiSource) -> Option<WiktionaryEntry> {
         suru: false,
         source: EntrySource::WagoOkuri,
     })
+}
+
+fn starts_with_okuri(okuri_reading: &str, dictionary_reading: &str) -> bool {
+    okuri_reading
+        .strip_suffix(|ch: char| ch.is_ascii_alphabetic())
+        .is_some_and(|stem| dictionary_reading.starts_with(stem))
 }
 
 pub fn to_entry(entry: &WiktionaryEntry) -> Entry {
@@ -1057,6 +1065,23 @@ mod tests {
                 candidate: "忘".into(),
                 suru: false,
                 source: EntrySource::WagoOkuri,
+            }]
+        );
+    }
+
+    #[test]
+    fn keeps_noun_reading_when_bold_form_has_no_okuri() {
+        let page = parse_japanese_page(
+            "周知",
+            "{{kana-DEFAULTSORT|しゅうち}}\n=={{ja}}==\n'''[[周]] [[知]]'''（[[しゅうち]]）",
+        );
+        assert_eq!(
+            wiktionary_entries(&page),
+            vec![WiktionaryEntry {
+                reading: "しゅうち".into(),
+                candidate: "周知".into(),
+                suru: false,
+                source: EntrySource::Idiom,
             }]
         );
     }
