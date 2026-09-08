@@ -11,10 +11,10 @@
 SKK-JISYO.wiktionaryは日本語版Wiktionaryのページから生成した現代仮名遣いのSKK辞書です。ベースとなる辞書を目指しています。
 SKK-JISYO.Lとの違いは以下の通りです。
 
-|           | .L    | .wiktionary |
-|-----------|-------|--------------|
-|ライセンス | GPL    | CC BY-SA 4.0 |
-| 単語数    | 約18万 | 約9.6万      |
+|            | .L     | .wiktionary  |
+|------------|--------|--------------|
+| ライセンス | GPL    | CC BY-SA 4.0 |
+| エントリ数 | 約18万 | 約10万       |
 
 ### 使い方
 
@@ -167,18 +167,18 @@ $ cargo run --release --bin wiktionary_jisyo -- \
      --report wiktionary-jisyo-report.tsv
 ```
 
-このデータは正しくソートされていないので `skkdic-sort` を使ってソートする。
+このデータは正しくソートされていないので `skkdic-sort` を使ってソートし、 `skkdic-expr2` でエントリをまとめる
 
 ``` console
 # wiktionary辞書
 $ cat header.txt > SKK-JISYO.wiktionary
-$ cat tmp.wiktionary | skkdic-sort >> SKK-JISYO.wiktionary
+$ cat tmp.wiktionary | skkdic-sort | skkdic-expr2 >> SKK-JISYO.wiktionary
 # 四角号碼辞書
 $ cat header.txt > SKK-JISYO.shikakugoma
-$ cat tmp.shikakugoma | skkdic-sort >> SKK-JISYO.shikakugoma
+$ cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
 # 字音
 cat header.txt > SKK-JISYO.jion
-cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK-JISYO.jion
+cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 >> SKK-JISYO.jion
 ```
 
 カレントディレクトリに辞書ができます。

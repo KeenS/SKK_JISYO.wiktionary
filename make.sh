@@ -91,12 +91,12 @@ generate() {
             --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
         cat header.txt > SKK-JISYO.shikakugoma
-        cat tmp.shikakugoma | skkdic-sort >> SKK-JISYO.shikakugoma
+        cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
         cat header.txt > SKK-JISYO.wiktionary
-        cat tmp.wiktionary | skkdic-sort >> SKK-JISYO.wiktionary
+        cat tmp.wiktionary | skkdic-sort | skkdic-expr2 >> SKK-JISYO.wiktionary
         echo "Generating jion dictionary"
         cat header.txt > SKK-JISYO.jion
-        cat tmp.jion tmp.wiktionary.jion | skkdic-sort >> SKK-JISYO.jion
+        cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 >> SKK-JISYO.jion
         echo "Cleaning up"
         rm tmp.* ids.txt
     )
