@@ -69,6 +69,7 @@ generate() {
             printf "."
             sleep 1
         done
+        echo
         echo "Preparing Database"
         docker exec  -i wiktionary mysql wiktionary < "$CATLINK"
         echo "Extracting page ids of kanji articles"
