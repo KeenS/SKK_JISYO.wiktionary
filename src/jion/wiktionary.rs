@@ -83,10 +83,54 @@ pub enum EntrySource {
     KanjiWord,
     Idiom,
     Noun,
+    Redirect,
     WagoOkuri,
     Suru,
     SuruNoun,
     Kangokana,
+}
+
+/// Extract the destination of a MediaWiki redirect.
+///
+/// The Japanese Wiktionary uses both ASCII and full-width `#`, and the
+/// keyword is written in Latin characters or as `転送`.
+pub fn redirect_target(text: &str) -> Option<&str> {
+    let mut rest = text.trim_start();
+    if rest.starts_with('＃') {
+        rest = &rest['＃'.len_utf8()..];
+    } else if rest.starts_with('#') {
+        rest = &rest['#'.len_utf8()..];
+    } else {
+        return None;
+    }
+
+    let keyword_end = rest
+        .find(|ch: char| ch == '[' || ch.is_whitespace())
+        .unwrap_or(rest.len());
+    let keyword = rest[..keyword_end].trim_end();
+    if !eq_ignore_case(keyword, "redirect") && keyword != "転送" {
+        return None;
+    }
+
+    let start = rest.find("[[")?;
+    let start = start + 2;
+    let end = rest[start..].find("]]")? + start;
+    let target = &rest[start..end];
+    let target = target.split('#').next().unwrap_or(target);
+    let target = target.trim();
+    if target.is_empty() {
+        None
+    } else {
+        Some(target)
+    }
+}
+
+fn eq_ignore_case(value: &str, expected: &str) -> bool {
+    value.len() == expected.len()
+        && value
+            .chars()
+            .zip(expected.chars())
+            .all(|(a, b)| a.eq_ignore_ascii_case(&b))
 }
 
 fn default_sort_bodies(text: &str) -> Vec<String> {
@@ -969,6 +1013,24 @@ fn okuri_romaji(ch: char) -> Option<char> {
 mod tests {
     use super::*;
     use crate::jion::mapping::Mapping;
+
+    #[test]
+    fn parses_redirect_targets() {
+        assert_eq!(redirect_target("#REDIRECT [[別別]]"), Some("別別"));
+        assert_eq!(redirect_target("#REDIRECT[[cœur]]"), Some("cœur"));
+        assert_eq!(
+            redirect_target("#redirect[[お邪魔します]]"),
+            Some("お邪魔します")
+        );
+        assert_eq!(redirect_target("#転送 [[散散]]"), Some("散散"));
+        assert_eq!(redirect_target("＃転送[[云云]]"), Some("云云"));
+        assert_eq!(
+            redirect_target("#REDIRECT [[アメリカ合衆国#語源]]"),
+            Some("アメリカ合衆国")
+        );
+        assert_eq!(redirect_target("#REDIRECT"), None);
+        assert_eq!(redirect_target("=={{ja}}=="), None);
+    }
 
     #[test]
     fn parses_defaultsort_colon_form() {

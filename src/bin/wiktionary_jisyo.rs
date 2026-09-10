@@ -10,8 +10,8 @@ use xml_xtract::jion::entry::Entry;
 use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
 use xml_xtract::jion::on_reading::has_on_reading;
 use xml_xtract::jion::wiktionary::{
-    kanji_word_entries, parse_japanese_page, to_entry, wiktionary_entries, EntrySource,
-    JapanesePage, WiktionaryEntry,
+    is_kanji, kanji_word_entries, parse_japanese_page, redirect_target, to_entry,
+    wiktionary_entries, EntrySource, JapanesePage, WiktionaryEntry,
 };
 
 #[cfg(test)]
@@ -68,6 +68,7 @@ mod tests {
             wago_entries: 1,
             idiom_entries: 0,
             kangokana_entries: 0,
+            redirect_entries: 0,
             jion_entries: 3,
             shared_entries: 1,
             invalid_pages: 0,
@@ -112,7 +113,8 @@ mod tests {
                 text: String::new(),
             },
         };
-        let (_, converted, jion) = page_entries(&page, &mappings, Source::All, &raw_page);
+        let (_, converted, jion) =
+            page_entries(&page, &mappings, Source::All, &raw_page, &HashMap::new());
         assert_eq!(converted, vec![Entry::new("がっこう", "学校")]);
         assert_eq!(jion, vec![Entry::new("がくかう", "学校")]);
     }
@@ -156,6 +158,7 @@ struct Report {
     wago_entries: usize,
     idiom_entries: usize,
     kangokana_entries: usize,
+    redirect_entries: usize,
     jion_entries: usize,
     shared_entries: usize,
     invalid_pages: usize,
@@ -174,6 +177,7 @@ impl Report {
                     self.wago_entries += 1
                 }
                 EntrySource::Kangokana => self.kangokana_entries += 1,
+                EntrySource::Redirect => self.redirect_entries += 1,
             }
         }
     }
@@ -282,6 +286,7 @@ fn page_entries(
     mappings: &MappingIndex,
     source: Source,
     raw_page: &xml_xtract::model::Page,
+    redirects: &HashMap<String, Vec<String>>,
 ) -> (Vec<WiktionaryEntry>, Vec<Entry>, Vec<Entry>) {
     let mut words = Vec::new();
     let mut jion_entries = Vec::new();
@@ -301,10 +306,42 @@ fn page_entries(
         words.extend(wiktionary_entries(page));
         if source == Source::All {
             words.extend(new_style_variant_entries(page, raw_page));
+            if let Some(titles) = redirects.get(page.title.as_str()) {
+                let reading = redirect_reading(page);
+                words.extend(redirect_word_entries(reading, page.title.as_str(), titles));
+            }
         }
     }
     let entries = words.iter().map(to_entry).collect();
     (words, entries, jion_entries)
+}
+
+fn redirect_word_entries(
+    reading: Option<String>,
+    canonical_title: &str,
+    titles: &[String],
+) -> Vec<WiktionaryEntry> {
+    let Some(reading) = reading else {
+        return Vec::new();
+    };
+    let mut entries = vec![WiktionaryEntry {
+        reading: reading.clone(),
+        candidate: canonical_title.to_string(),
+        suru: false,
+        source: EntrySource::Redirect,
+    }];
+    entries.extend(
+        titles
+            .iter()
+            .filter(|title| title.chars().any(is_kanji))
+            .map(|title| WiktionaryEntry {
+                reading: reading.clone(),
+                candidate: title.clone(),
+                suru: false,
+                source: EntrySource::Redirect,
+            }),
+    );
+    entries
 }
 
 fn new_style_variant_entries(
@@ -346,6 +383,7 @@ fn main() -> ExitCode {
 
 fn run(options: Options) -> io::Result<()> {
     let mappings = MappingIndex::new(&read_mapping(&options.mapping)?);
+    let redirects = redirect_index(&options.xml);
     let mut output_entries = BTreeMap::<EntryKey, Entry>::new();
     let mut jion_entries = BTreeMap::<EntryKey, Entry>::new();
     let mut report = Report::default();
@@ -360,7 +398,7 @@ fn run(options: Options) -> io::Result<()> {
         report.kanjitabs += parsed.kanjitabs.len();
         report.noun_readings += parsed.noun_readings.len();
         let (entries, converted, page_jion_entries) =
-            page_entries(&parsed, &mappings, options.source, &page);
+            page_entries(&parsed, &mappings, options.source, &page, &redirects);
         for entry in page_jion_entries {
             jion_entries.insert(entry_key(&entry), entry);
         }
@@ -394,6 +432,43 @@ fn run(options: Options) -> io::Result<()> {
     Ok(())
 }
 
+fn redirect_index(xml: &PathBuf) -> HashMap<String, Vec<String>> {
+    let mut redirects: HashMap<String, Vec<String>> = HashMap::new();
+    for page in articles(xml) {
+        if page.ns != 0 {
+            continue;
+        }
+        if let Some(target) = redirect_target(&page.revision.text) {
+            redirects
+                .entry(target.to_string())
+                .or_default()
+                .push(page.title.clone());
+        }
+    }
+    redirects
+}
+
+fn redirect_reading(page: &JapanesePage) -> Option<String> {
+    page.noun_readings
+        .iter()
+        .chain(page.pron_readings.iter())
+        .chain(page.noun_suru_readings.iter())
+        .find(|reading| valid_dictionary_reading(reading))
+        .cloned()
+        .or_else(|| {
+            page.default_sorts
+                .iter()
+                .find(|reading| valid_dictionary_reading(reading))
+                .cloned()
+        })
+}
+
+fn valid_dictionary_reading(reading: &str) -> bool {
+    !reading.is_empty()
+        && reading.chars().count() <= 32
+        && reading.chars().all(|ch| ('ぁ'..='ゖ').contains(&ch))
+}
+
 fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
@@ -405,6 +480,7 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "wago_entries\t{}", report.wago_entries)?;
     writeln!(writer, "idiom_entries\t{}", report.idiom_entries)?;
     writeln!(writer, "kangokana_entries\t{}", report.kangokana_entries)?;
+    writeln!(writer, "redirect_entries\t{}", report.redirect_entries)?;
     writeln!(writer, "jion_entries\t{}", report.jion_entries)?;
     writeln!(writer, "shared_entries\t{}", report.shared_entries)?;
     writeln!(writer, "invalid_pages\t{}", report.invalid_pages)?;

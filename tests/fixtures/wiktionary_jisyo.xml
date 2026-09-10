@@ -52,6 +52,26 @@ Not Japanese.</text>
     </revision>
   </page>
   <page>
+    <title>別々</title>
+    <ns>0</ns>
+    <id>8</id>
+    <revision>
+      <id>8</id>
+      <text>＃転送[[別別]]</text>
+    </revision>
+  </page>
+  <page>
+    <title>別別</title>
+    <ns>0</ns>
+    <id>9</id>
+    <revision>
+      <id>9</id>
+      <text>=={{ja}}==
+{{ja-pron|べつべつ}}
+{{ja-noun|べつべつ}}</text>
+    </revision>
+  </page>
+  <page>
     <title>緘する</title>
     <ns>0</ns>
     <id>5</id>

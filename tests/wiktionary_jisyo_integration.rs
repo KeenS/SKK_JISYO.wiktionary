@@ -96,6 +96,8 @@ fn converts_wiktionary_fixture_end_to_end() {
     assert!(!output_text.contains("かんする /緘する/"));
     assert!(output_text.contains("えん /円/"));
     assert!(output_text.contains("たくさん /沢山/"));
+    assert!(output_text.contains("べつべつ /別別/"));
+    assert!(output_text.contains("べつべつ /別々/"));
 
     let jion_output_text = fs::read_to_string(&jion_output).unwrap();
     assert!(jion_output_text.contains(";; okuri-ari entries."));
@@ -106,10 +108,11 @@ fn converts_wiktionary_fixture_end_to_end() {
 
     let report_text = fs::read_to_string(&report).unwrap();
     assert!(report_text.contains("metric\tcount"));
-    assert!(report_text.contains("pages\t6"));
+    assert!(report_text.contains("pages\t7"));
     assert!(report_text.contains("jion_entries\t1"));
     assert!(report_text.contains("shared_entries\t0"));
-    assert!(report_text.contains("invalid_pages\t1"));
+    assert!(report_text.contains("invalid_pages\t2"));
+    assert!(report_text.contains("redirect_entries\t2"));
 
     fs::remove_file(output).unwrap();
     fs::remove_file(jion_output).unwrap();
@@ -138,7 +141,7 @@ fn dry_run_does_not_write_wiktionary_dictionary() {
     assert!(!output.exists());
 
     let report_text = fs::read_to_string(&report).unwrap();
-    assert!(report_text.contains("entries\t2"));
+    assert!(report_text.contains("entries\t8"));
 
     fs::remove_file(report).unwrap();
 }
