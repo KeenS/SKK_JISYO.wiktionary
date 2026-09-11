@@ -232,6 +232,14 @@ fn template_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
     bodies
 }
 
+fn template_bodies_after<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
+    let marker = format!("{{{{{name}}}}}");
+    text.match_indices(&marker)
+        .map(|(index, _)| index + marker.len())
+        .map(|start| &text[start..])
+        .collect()
+}
+
 fn split_params(body: &str) -> Vec<&str> {
     body.split('|').map(str::trim).collect()
 }
@@ -392,12 +400,6 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
             page.wagokanji_sources.push(source);
         }
     }
-    for reading in &page.wagokanji_readings {
-        if !page.verb_titles.contains(reading) {
-            page.verb_titles.push(reading.clone());
-        }
-    }
-
     for body in template_bodies(text, "ja-noun") {
         for param in split_params(body) {
             if param.contains('=') {
@@ -438,14 +440,28 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    for body in template_bodies(text, "ja-verb") {
+    for body in template_bodies(text, "ja-verb")
+        .into_iter()
+        .chain(template_bodies_after(text, "ja-verb"))
+    {
         for title in extract_bracket_titles(body) {
             if !page.verb_titles.contains(&title) {
                 page.verb_titles.push(title);
             }
         }
     }
-    if template_bodies(text, "ja-verb").is_empty() {
+    for reading in &page.wagokanji_readings {
+        if reading.ends_with(['る', 'つ', 'む', 'ぬ', 'ぶ', 'く', 'ぐ', 'す'])
+            && !page.verb_titles.contains(reading)
+            && !page.adjective_titles.contains(reading)
+            && !page.adverb_titles.contains(reading)
+        {
+            page.verb_titles.push(reading.clone());
+        }
+    }
+    if template_bodies(text, "ja-verb").is_empty()
+        && template_bodies_after(text, "ja-verb").is_empty()
+    {
         for title in extract_bracket_titles(text) {
             if !page.verb_titles.contains(&title) {
                 page.verb_titles.push(title);
@@ -520,19 +536,10 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    for body in template_bodies(text, "ja-adv") {
+    for body in template_bodies_after(text, "ja-adv") {
         for title in extract_bracket_titles(body) {
             if !page.adverb_titles.contains(&title) {
                 page.adverb_titles.push(title);
-            }
-        }
-        for param in split_params(body) {
-            if param.contains('=') {
-                continue;
-            }
-            let value = clean_wikitext(param);
-            if !value.is_empty() && !page.adverb_titles.contains(&value) {
-                page.adverb_titles.push(value);
             }
         }
     }
@@ -967,17 +974,26 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     }
 
     for candidate in &page.verb_titles {
-        if let Some(entry) = okuri_candidate(page, candidate) {
-            entries.push(entry);
-        }
+        let is_non_verb_okuri = page
+            .adjective_titles
+            .iter()
+            .chain(page.adverb_titles.iter())
+            .any(|title| title.as_str() == candidate);
+        let is_kana_reading = candidate.as_str() == page.title || !candidate.contains(is_kanji);
+        let generate_onbin = !is_non_verb_okuri
+            && (candidate.contains(is_kanji)
+                || page
+                    .verb_titles
+                    .iter()
+                    .all(|title| !title.contains(is_kanji)))
+            || is_kana_reading && page.verb_titles.len() == 1 && !page.title.chars().any(is_kanji);
+        entries.extend(okuri_candidates(page, candidate, generate_onbin));
     }
     for candidate in &page.adjective_titles {
         if page.verb_titles.contains(candidate) {
             continue;
         }
-        if let Some(entry) = okuri_candidate(page, candidate) {
-            entries.push(entry);
-        }
+        entries.extend(okuri_candidates(page, candidate, false));
     }
     for candidate in &page.adverb_titles {
         if page.verb_titles.contains(candidate) || page.adjective_titles.contains(candidate) {
@@ -987,9 +1003,7 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             entries.push(entry);
         }
     }
-    if let Some(entry) = okuri_candidate(page, page.title.as_str()) {
-        entries.push(entry);
-    }
+    entries.extend(okuri_candidates(page, page.title.as_str(), true));
     for source in &page.wagokanji_sources {
         if let Some(entry) = wago_source_entry(source) {
             entries.push(entry);
@@ -1101,8 +1115,71 @@ fn old_japanese_split_title(title: &str) -> Option<(&str, &str)> {
     }
 }
 
+fn okuri_candidates(
+    page: &JapanesePage,
+    candidate: &str,
+    generate_onbin: bool,
+) -> Vec<WiktionaryEntry> {
+    let mut entries = Vec::new();
+    if let Some(entry) = okuri_candidate(page, candidate) {
+        if generate_onbin {
+            entries.extend(okuri_onbin_entries(&entry));
+        }
+        entries.push(entry);
+    }
+    entries
+}
+
+fn okuri_onbin_entries(dictionary_entry: &WiktionaryEntry) -> Vec<WiktionaryEntry> {
+    let Some((stem, dictionary_key_consonant)) = split_onbin_stem(&dictionary_entry.reading) else {
+        return Vec::new();
+    };
+    let suffix = match dictionary_key_consonant {
+        'r' | 'u' => "t",
+        't' => "tt",
+        'm' | 'n' | 'b' => "n",
+        'k' | 'g' => {
+            if is_iku_verb(&dictionary_entry.candidate) {
+                "t"
+            } else {
+                "i"
+            }
+        }
+        _ => return Vec::new(),
+    };
+    let mut key = String::with_capacity(stem.len() + suffix.len());
+    key.push_str(stem);
+    key.push_str(suffix);
+    if key == dictionary_entry.reading {
+        return Vec::new();
+    }
+    vec![WiktionaryEntry {
+        reading: key,
+        candidate: dictionary_entry.candidate.clone(),
+        suru: false,
+        source: EntrySource::WagoOkuri,
+    }]
+}
+
+fn split_onbin_stem(reading: &str) -> Option<(&str, char)> {
+    let mut chars = reading.char_indices().rev();
+    let (_, consonant) = chars.next()?;
+    if !consonant.is_ascii_lowercase() {
+        return None;
+    }
+    let (previous_index, previous) = chars.next()?;
+    Some((
+        reading.get(..previous_index + previous.len_utf8())?,
+        consonant,
+    ))
+}
+
+fn is_iku_verb(candidate: &str) -> bool {
+    candidate.ends_with(['行', '逝', '往']) && candidate.ends_with("く")
+}
+
 fn okuri_candidate(page: &JapanesePage, candidate: &str) -> Option<WiktionaryEntry> {
-    if !candidate.contains(is_kanji) || candidate.ends_with("する") {
+    if !candidate.contains(is_kanji) {
         return None;
     }
     let (stem, suffix) = split_candidate(candidate);
@@ -1115,6 +1192,7 @@ fn okuri_candidate(page: &JapanesePage, candidate: &str) -> Option<WiktionaryEnt
         .wagokanji_readings
         .iter()
         .filter_map(|reading| reading.strip_suffix(suffix))
+        .filter(|reading| reading.chars().count() >= stem.chars().count())
         .max_by_key(|reading| reading.chars().count())?;
 
     let mut key = String::with_capacity(stem_reading.len() + 1);
@@ -1205,6 +1283,17 @@ mod tests {
     use super::*;
     use crate::jion::mapping::Mapping;
 
+    fn collect_wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
+        wiktionary_entries(page)
+    }
+
+    fn entry_strings(entries: &[WiktionaryEntry]) -> Vec<String> {
+        entries
+            .iter()
+            .map(|entry| format!("{} /{}/", entry.reading, entry.candidate))
+            .collect()
+    }
+
     #[test]
     fn parses_redirect_targets() {
         assert_eq!(redirect_target("#REDIRECT [[別別]]"), Some("別別"));
@@ -1246,7 +1335,7 @@ mod tests {
         let page = parse_japanese_page("仙", "[[Category:{{ja}}|せん]]");
         assert_eq!(page.default_sorts, vec!["せん".to_string()]);
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "せん".into(),
                 candidate: "仙".into(),
@@ -1264,7 +1353,7 @@ mod tests {
         );
         assert_eq!(page.kanji_template_readings, vec!["りょう".to_string()]);
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "りょう".into(),
                 candidate: "料".into(),
@@ -1316,7 +1405,7 @@ mod tests {
             "{{DEFAULTSORT:しめんそか}}\n{{ja-idiom|しめんそか}}",
         );
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "しめんそか".into(),
                 candidate: "四面楚歌".into(),
@@ -1353,7 +1442,7 @@ mod tests {
         );
         assert_eq!(page.kangokana_candidates, vec!["公門", "孔門"]);
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![
                 WiktionaryEntry {
                     reading: "こうもん".into(),
@@ -1390,7 +1479,7 @@ mod tests {
             "{{DEFAULTSORT:かとわかす かどわかす}}\n=={{ja}}==\n{{lang|ja|'''[[拐]]かす'''}}（かどわかす）",
         );
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "かどわk".into(),
                 candidate: "拐".into(),
@@ -1407,7 +1496,7 @@ mod tests {
             "{{DEFAULTSORT:わすれる}}\n=={{ja}}==\n'''[[忘]]れる'''（わすれる）",
         );
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "わすr".into(),
                 candidate: "忘".into(),
@@ -1424,7 +1513,7 @@ mod tests {
             "{{kana-DEFAULTSORT|しゅうち}}\n=={{ja}}==\n'''[[周]] [[知]]'''（[[しゅうち]]）",
         );
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "しゅうち".into(),
                 candidate: "周知".into(),
@@ -1441,7 +1530,7 @@ mod tests {
             "{{kana-DEFAULTSORT|わかわかしい}}\n=={{ja}}==\n'''[[若]][[若]]しい'''（わかわかしい）",
         );
         assert_eq!(
-            wiktionary_entries(&page),
+            collect_wiktionary_entries(&page),
             vec![WiktionaryEntry {
                 reading: "わかわかs".into(),
                 candidate: "若若".into(),
@@ -1454,14 +1543,48 @@ mod tests {
     #[test]
     fn converts_wagokanji_title_without_verb_template() {
         let page = parse_japanese_page("歩く", "{{ja-wagokanji|あるく}}");
+        assert_eq!(page.verb_titles, vec!["あるく".to_string()]);
         assert_eq!(
-            wiktionary_entries(&page),
-            vec![WiktionaryEntry {
-                reading: "あるk".into(),
-                candidate: "歩".into(),
-                suru: false,
-                source: EntrySource::WagoOkuri,
-            }]
+            entry_strings(&okuri_candidates(&page, "歩く", true)),
+            vec!["あるi /歩/".to_string(), "あるk /歩/".to_string()]
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec!["あるi /歩/".to_string(), "あるk /歩/".to_string()]
+        );
+    }
+
+    #[test]
+    fn generates_onbin_entry_for_ru_ending_verb() {
+        let page = parse_japanese_page(
+            "焦る",
+            "{{ja-wagokanji|あせる|いる}}{{ja-verb}}【[[焦]]る】",
+        );
+        assert_eq!(
+            page.wagokanji_readings,
+            vec!["あせる".to_string(), "いる".to_string()]
+        );
+        assert_eq!(page.adverb_titles, Vec::<String>::new());
+        assert_eq!(
+            page.verb_titles,
+            vec!["焦る".to_string(), "あせる".to_string(), "いる".to_string()]
+        );
+        let base_entry = okuri_candidate(&page, "焦る").unwrap();
+        assert_eq!(base_entry.reading, "あせr");
+        let onbin_entry = okuri_onbin_entries(&base_entry);
+        assert_eq!(onbin_entry[0].reading, "あせt");
+        assert_eq!(
+            entry_strings(&okuri_candidates(&page, "焦る", true)),
+            vec!["あせt /焦/".to_string(), "あせr /焦/".to_string()]
+        );
+        assert_eq!(page.adjective_titles, vec!["焦る".to_string()]);
+        assert_eq!(
+            entry_strings(&okuri_candidates(&page, "焦る", true)),
+            vec!["あせt /焦/".to_string(), "あせr /焦/".to_string()]
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec!["あせr /焦/".to_string(), "あせt /焦/".to_string()]
         );
     }
 
@@ -1499,12 +1622,20 @@ mod tests {
     }
 
     #[test]
-    fn converts_adverb_title_to_okuri_entry() {
+    fn generates_no_onbin_entry_for_adverbial_ku() {
         let page = parse_japanese_page(
             "はやく",
             "{{ja-wagokanji|はやく}}{{ja-adv}}【[[早]]く、[[速]]く】",
         );
         let entries = wiktionary_entries(&page);
+        assert_eq!(
+            page.verb_titles,
+            vec!["はやく".to_string(), "早く".to_string(), "速く".to_string()]
+        );
+        assert_eq!(
+            page.adverb_titles,
+            vec!["早く".to_string(), "速く".to_string()]
+        );
         assert_eq!(
             entries,
             vec![
