@@ -64,6 +64,7 @@ mod tests {
             pages: 1,
             entries: 2,
             kanji_entries: 1,
+            kanji_reading_entries: 0,
             noun_entries: 0,
             wago_entries: 1,
             idiom_entries: 0,
@@ -154,6 +155,7 @@ struct Report {
     pages: usize,
     entries: usize,
     kanji_entries: usize,
+    kanji_reading_entries: usize,
     noun_entries: usize,
     wago_entries: usize,
     idiom_entries: usize,
@@ -171,6 +173,7 @@ impl Report {
         for entry in entries {
             match entry.source {
                 EntrySource::KanjiWord => self.kanji_entries += 1,
+                EntrySource::KanjiReading => self.kanji_reading_entries += 1,
                 EntrySource::Noun => self.noun_entries += 1,
                 EntrySource::Idiom => self.idiom_entries += 1,
                 EntrySource::WagoOkuri | EntrySource::Suru | EntrySource::SuruNoun => {
@@ -476,6 +479,11 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "pages\t{}", report.pages)?;
     writeln!(writer, "entries\t{}", report.entries)?;
     writeln!(writer, "kanji_entries\t{}", report.kanji_entries)?;
+    writeln!(
+        writer,
+        "kanji_reading_entries\t{}",
+        report.kanji_reading_entries
+    )?;
     writeln!(writer, "noun_entries\t{}", report.noun_entries)?;
     writeln!(writer, "wago_entries\t{}", report.wago_entries)?;
     writeln!(writer, "idiom_entries\t{}", report.idiom_entries)?;

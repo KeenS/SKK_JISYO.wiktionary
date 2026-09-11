@@ -84,6 +84,54 @@ pub fn parse_on_readings(params: &str) -> Vec<OnReading> {
     readings
 }
 
+pub fn parse_common_readings(params: &str) -> Vec<String> {
+    parse_named_readings(params, "常用")
+}
+
+pub fn parse_dictionary_on_readings(params: &str) -> Vec<String> {
+    parse_on_readings(params)
+        .into_iter()
+        .map(|reading| reading.modern)
+        .filter(|reading| is_hiragana_reading(reading))
+        .collect()
+}
+
+fn parse_named_readings(params: &str, name: &str) -> Vec<String> {
+    let mut readings = Vec::new();
+    let pattern = format!(
+        r"{name}(?:\d+)?\s*=\s*([^|;}}]+)",
+        name = regex::escape(name)
+    );
+    let regex = Regex::new(&pattern).expect("internal error: invalid named reading regex");
+    for captures in regex.captures_iter(params) {
+        for pair in captures[1].split(',') {
+            let reading = pair.split('<').next().unwrap_or_default().trim();
+            let reading = katakana_to_hiragana(reading);
+            if is_hiragana_reading(&reading) && !readings.contains(&reading) {
+                readings.push(reading);
+            }
+        }
+    }
+    readings
+}
+
+fn katakana_to_hiragana(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ('ァ'..='ヶ').contains(&ch) {
+                char::from_u32(ch as u32 - 0x60).unwrap_or(ch)
+            } else {
+                ch
+            }
+        })
+        .collect()
+}
+
+fn is_hiragana_reading(value: &str) -> bool {
+    !value.is_empty() && value.chars().all(|ch| ('ぁ'..='ゖ').contains(&ch))
+}
+
 pub fn build_historical_inference(mappings: &[Mapping]) -> HashMap<String, String> {
     let mut counts = HashMap::new();
     for mapping in mappings {
@@ -218,6 +266,47 @@ mod tests {
                 modern: "げ".into(),
                 historical: None,
             }]
+        );
+    }
+
+    #[test]
+    fn parses_common_readings_with_kun_and_historical_forms() {
+        let readings =
+            parse_common_readings("常用=リョウ|施策=教育:4|呉音=リョウ<レウ|漢音=リョウ<レウ");
+        assert_eq!(readings, vec!["りょう".to_string()]);
+    }
+
+    #[test]
+    fn parses_all_dictionary_on_reading_fields() {
+        let readings = parse_dictionary_on_readings(
+            "常用=セイ|呉音1=ショウ|呉音2=ス|漢音=セイ|唐音=チン,シイ|宋音=ソン|慣用音=ゼイ",
+        );
+        assert_eq!(
+            readings,
+            vec![
+                "しょう".to_string(),
+                "す".to_string(),
+                "せい".to_string(),
+                "ちん".to_string(),
+                "しい".to_string(),
+                "そん".to_string(),
+                "ぜい".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_annotated_common_readings_until_annotation() {
+        let readings =
+            parse_common_readings("常用=セイ,ショウ,あお,あお-い,あき;[[w:明|明]]|名乗=あき");
+        assert_eq!(
+            readings,
+            vec![
+                "せい".to_string(),
+                "しょう".to_string(),
+                "あお".to_string(),
+                "あき".to_string()
+            ]
         );
     }
 

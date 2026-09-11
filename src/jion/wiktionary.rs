@@ -5,6 +5,9 @@ use regex::Regex;
 
 use super::entry::Entry;
 use super::mapping::MappingIndex;
+use super::on_reading::{
+    kanji_template_params, parse_common_readings, parse_dictionary_on_readings,
+};
 use super::rules::{canonicalize_modern, normalize_historical, render_segment};
 use super::segmentation::Segment;
 
@@ -12,6 +15,7 @@ use super::segmentation::Segment;
 pub struct JapanesePage {
     pub title: String,
     pub default_sorts: Vec<String>,
+    pub kanji_template_readings: Vec<String>,
     pub wagokanji_sources: Vec<WagokanjiSource>,
     pub kanjitabs: Vec<Kanjitab>,
     pub wagokanji_readings: Vec<String>,
@@ -81,6 +85,7 @@ pub struct WiktionaryEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntrySource {
     KanjiWord,
+    KanjiReading,
     Idiom,
     Noun,
     Redirect,
@@ -262,6 +267,19 @@ fn category_sort_readings(title: &str, body: &str) -> Vec<String> {
     readings
 }
 
+fn kanji_template_readings(text: &str) -> Vec<String> {
+    let Some(params) = kanji_template_params(text) else {
+        return Vec::new();
+    };
+    let mut readings = parse_common_readings(params);
+    for reading in parse_dictionary_on_readings(params) {
+        if !readings.contains(&reading) {
+            readings.push(reading);
+        }
+    }
+    readings
+}
+
 pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
     let kanjitab_regex = &*KANJITAB_REGEX;
     let mut page = JapanesePage {
@@ -274,6 +292,11 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
             if !page.default_sorts.contains(&reading) {
                 page.default_sorts.push(reading);
             }
+        }
+    }
+    for reading in kanji_template_readings(text) {
+        if !page.kanji_template_readings.contains(&reading) {
+            page.kanji_template_readings.push(reading);
         }
     }
     for body in japanese_category_sort_bodies(text) {
@@ -829,6 +852,14 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
                 source: EntrySource::Idiom,
             });
         }
+        for reading in &page.kanji_template_readings {
+            entries.push(WiktionaryEntry {
+                reading: reading.clone(),
+                candidate: page.title.clone(),
+                suru: false,
+                source: EntrySource::KanjiReading,
+            });
+        }
     }
 
     if kana_only(&page.title) {
@@ -1063,6 +1094,45 @@ mod tests {
                 source: EntrySource::Idiom,
             }]
         );
+    }
+
+    #[test]
+    fn converts_kanji_template_readings_for_single_kanji() {
+        let page = parse_japanese_page(
+            "料",
+            "=={{L|ja}}==\n{{ja-kanji|常用=リョウ|施策=教育:4|呉音=リョウ<レウ|漢音=リョウ<レウ}}",
+        );
+        assert_eq!(page.kanji_template_readings, vec!["りょう".to_string()]);
+        assert_eq!(
+            wiktionary_entries(&page),
+            vec![WiktionaryEntry {
+                reading: "りょう".into(),
+                candidate: "料".into(),
+                suru: false,
+                source: EntrySource::KanjiReading,
+            }]
+        );
+    }
+
+    #[test]
+    fn merges_common_and_on_readings_from_kanji_template() {
+        let page = parse_japanese_page(
+            "青",
+            "{{kana-DEFAULTSORT|せい}}\n=={{L|ja}}==\n{{ja-kanji|常用=セイ|呉音=ショウ<シャウ|漢音=セイ|唐音=チン,シイ}}",
+        );
+        assert_eq!(
+            page.kanji_template_readings,
+            vec![
+                "せい".to_string(),
+                "しょう".to_string(),
+                "ちん".to_string(),
+                "しい".to_string()
+            ]
+        );
+        let entries = wiktionary_entries(&page);
+        assert!(entries.iter().any(|entry| entry.reading == "しょう"
+            && entry.candidate == "青"
+            && entry.source == EntrySource::KanjiReading));
     }
 
     #[test]
