@@ -4,6 +4,7 @@
 * SKK-JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
 * SKK-JISYO.shikakugoma: 四角号碼の変換辞書です
 * SKK-JISYO.jion: 字音仮名遣いで変換する辞書です
+* SKK-JISYO.ojp: 古典日本語（歴史的仮名遣い）の変換辞書です
 
 ## SKKのWiktionary辞書
 ### これは何？
@@ -56,6 +57,23 @@ SKK-JISYO.shikakugomaはSKKで使える[四角号碼](https://ja.wikipedia.org/w
 通常のSKK辞書として使えます。数字からの変換は「Q」から変換できます（SKKエンジンによって異なるかもしれません）。
 
 1つの辞書しか扱えないSKKエンジンを使っている場合は[skkdic-expr2](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=%BC%AD%BD%F1%A5%E1%A5%F3%A5%C6%A5%CA%A5%F3%A5%B9%A5%C4%A1%BC%A5%EB)などで1つにまとめて下さい。
+
+## SKKの古典日本語辞書
+
+### これは何？
+
+`SKK-JISYO.ojp` は日本語版Wiktionaryの古典日本語（`ojp` セクション）ら生成した辞書です。
+
+この辞書には以下のようなエントリが含まれます。
+
+```text
+あるk /歩/
+と /疾/
+```
+
+### 使い方
+
+通常のSKK辞書として使えます。古典日本語の語彙だけを含むため、現代日本語用の`SKK-JISYO.wiktionary`の補助辞書という位置付けです。。
 
 ## SKKの字音仮名遣い辞書
 ### これは何？
@@ -173,6 +191,9 @@ $ cargo run --release --bin wiktionary_jisyo -- \
 # wiktionary辞書
 $ cat header.txt > SKK-JISYO.wiktionary
 $ cat tmp.wiktionary | skkdic-sort | skkdic-expr2 >> SKK-JISYO.wiktionary
+# 古典日本語辞書
+$ cat header.txt > SKK-JISYO.ojp
+$ cat tmp.ojp | skkdic-sort | skkdic-expr2 >> SKK-JISYO.ojp
 # 四角号碼辞書
 $ cat header.txt > SKK-JISYO.shikakugoma
 $ cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma

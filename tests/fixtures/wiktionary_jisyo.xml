@@ -42,6 +42,19 @@
     </revision>
   </page>
   <page>
+    <title>あるく</title>
+    <ns>0</ns>
+    <id>10</id>
+    <revision>
+      <id>10</id>
+      <text>=={{L|ja}}==
+{{ja-verb}}【[[歩]]く】
+=={{L|ojp}}==
+{{ojp-verb}}【[[歩]]く】
+{{古典日本語四段活用|ある|く}}</text>
+    </revision>
+  </page>
+  <page>
     <title>English</title>
     <ns>0</ns>
     <id>4</id>

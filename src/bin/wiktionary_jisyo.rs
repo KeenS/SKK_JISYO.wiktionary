@@ -10,8 +10,8 @@ use xml_xtract::jion::entry::Entry;
 use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
 use xml_xtract::jion::on_reading::has_on_reading;
 use xml_xtract::jion::wiktionary::{
-    is_kanji, kanji_word_entries, parse_japanese_page, redirect_target, to_entry,
-    wiktionary_entries, EntrySource, JapanesePage, WiktionaryEntry,
+    is_kanji, kanji_word_entries, old_japanese_entries, parse_japanese_page, redirect_target,
+    to_entry, wiktionary_entries, EntrySource, JapanesePage, WiktionaryEntry,
 };
 
 #[cfg(test)]
@@ -35,6 +35,7 @@ mod tests {
             report: Some("report.tsv".into()),
             source: Source::Kanji,
             jion_output: None,
+            ojp_output: None,
             dry_run: true,
         };
         assert_eq!(options.source, Source::Kanji);
@@ -71,6 +72,7 @@ mod tests {
             kangokana_entries: 0,
             redirect_entries: 0,
             jion_entries: 3,
+            ojp_entries: 0,
             shared_entries: 1,
             invalid_pages: 0,
             kanjitabs: 0,
@@ -147,6 +149,7 @@ struct Options {
     report: Option<PathBuf>,
     source: Source,
     jion_output: Option<PathBuf>,
+    ojp_output: Option<PathBuf>,
     dry_run: bool,
 }
 
@@ -162,6 +165,7 @@ struct Report {
     kangokana_entries: usize,
     redirect_entries: usize,
     jion_entries: usize,
+    ojp_entries: usize,
     shared_entries: usize,
     invalid_pages: usize,
     kanjitabs: usize,
@@ -180,6 +184,7 @@ impl Report {
                     self.wago_entries += 1
                 }
                 EntrySource::Kangokana => self.kangokana_entries += 1,
+                EntrySource::OldJapanese => self.ojp_entries += 1,
                 EntrySource::Redirect => self.redirect_entries += 1,
             }
         }
@@ -229,7 +234,7 @@ fn usage(code: ExitCode) -> ExitCode {
     eprintln!(
         "Usage: wiktionary_jisyo --xml XML --mapping MAPPING --output OUTPUT \
          [--report REPORT] [--source all|kanji|wago] \
-         [--jion-output SEIKANA_OUTPUT] [--dry-run]"
+         [--jion-output SEIKANA_OUTPUT] [--ojp-output OJP_OUTPUT] [--dry-run]"
     );
     code
 }
@@ -240,6 +245,7 @@ fn parse_args() -> Result<Options, ExitCode> {
     let mut source = Source::All;
     let mut dry_run = false;
     let mut jion_output = None;
+    let mut ojp_output = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -247,6 +253,10 @@ fn parse_args() -> Result<Options, ExitCode> {
             "--jion-output" => {
                 let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
                 jion_output = Some(PathBuf::from(value));
+            }
+            "--ojp-output" => {
+                let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
+                ojp_output = Some(PathBuf::from(value));
             }
             "--source" => {
                 let value = args.next().ok_or_else(|| usage(ExitCode::FAILURE))?;
@@ -274,6 +284,7 @@ fn parse_args() -> Result<Options, ExitCode> {
         report: values.get("--report").map(PathBuf::from),
         source,
         jion_output,
+        ojp_output,
         dry_run,
     })
 }
@@ -389,9 +400,19 @@ fn run(options: Options) -> io::Result<()> {
     let redirects = redirect_index(&options.xml);
     let mut output_entries = BTreeMap::<EntryKey, Entry>::new();
     let mut jion_entries = BTreeMap::<EntryKey, Entry>::new();
+    let mut ojp_entries = BTreeMap::<EntryKey, Entry>::new();
     let mut report = Report::default();
 
     for page in articles(&options.xml) {
+        if let Some(text) = page.old_japanese_text_with_default_sort() {
+            let parsed = parse_japanese_page(page.title.as_str(), &text);
+            let entries = old_japanese_entries(&parsed);
+            report.add_entries(&entries);
+            for entry in entries.iter().map(to_entry) {
+                ojp_entries.insert(entry_key(&entry), entry);
+            }
+        }
+
         let Some(text) = page.japanese_text_with_default_sort() else {
             report.invalid_pages += 1;
             continue;
@@ -426,6 +447,13 @@ fn run(options: Options) -> io::Result<()> {
     let jion_dictionary = Dictionary::from_entries(jion_entries.values());
     if let Some(path) = options.jion_output {
         jion_dictionary.write_to(&path)?;
+    }
+
+    let ojp_dictionary = Dictionary::from_entries(ojp_entries.values());
+    if let Some(path) = options.ojp_output {
+        if !options.dry_run {
+            ojp_dictionary.write_to(&path)?;
+        }
     }
 
     if let Some(report_path) = options.report {
@@ -490,6 +518,7 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "kangokana_entries\t{}", report.kangokana_entries)?;
     writeln!(writer, "redirect_entries\t{}", report.redirect_entries)?;
     writeln!(writer, "jion_entries\t{}", report.jion_entries)?;
+    writeln!(writer, "ojp_entries\t{}", report.ojp_entries)?;
     writeln!(writer, "shared_entries\t{}", report.shared_entries)?;
     writeln!(writer, "invalid_pages\t{}", report.invalid_pages)?;
     writeln!(writer, "kanjitabs\t{}", report.kanjitabs)?;

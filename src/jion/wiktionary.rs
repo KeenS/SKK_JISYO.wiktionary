@@ -28,6 +28,7 @@ pub struct JapanesePage {
     pub suru_readings: Vec<String>,
     pub noun_suru_readings: Vec<String>,
     pub old_japanese_titles: Vec<String>,
+    pub old_japanese_conjugations: Vec<OldJapaneseConjugation>,
     pub kangokana_candidates: Vec<String>,
     pub new_style_variants: Vec<String>,
 }
@@ -75,6 +76,27 @@ fn bold_wagokanji_pair(body: &str) -> Option<(String, String)> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OldJapaneseConjugation {
+    pub stem: String,
+    pub suffix: String,
+    pub conjugation: OldJapaneseConjugationType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OldJapaneseConjugationType {
+    KamiIchidan,
+    KamiNidan,
+    ShimoIchidan,
+    ShimoNidan,
+    Shodan,
+    Irregular,
+    Nari,
+    Tari,
+    Ku,
+    Shiku,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WiktionaryEntry {
     pub reading: String,
     pub candidate: String,
@@ -93,6 +115,7 @@ pub enum EntrySource {
     Suru,
     SuruNoun,
     Kangokana,
+    OldJapanese,
 }
 
 /// Extract the destination of a MediaWiki redirect.
@@ -549,6 +572,66 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
                     page.old_japanese_titles.push(title);
                 }
             }
+            for param in split_params(body) {
+                let param = param.split('#').next().unwrap_or(param);
+                let param = clean_wikitext(param);
+                if param.contains(is_kanji) && !page.old_japanese_titles.contains(&param) {
+                    page.old_japanese_titles.push(param);
+                }
+            }
+        }
+        for title in extract_bracket_titles(text) {
+            if !page.old_japanese_titles.contains(&title) {
+                page.old_japanese_titles.push(title);
+            }
+        }
+    }
+
+    for (name, conjugation) in [
+        (
+            "古典日本語上一段活用",
+            OldJapaneseConjugationType::KamiIchidan,
+        ),
+        (
+            "古典日本語上二段活用",
+            OldJapaneseConjugationType::KamiNidan,
+        ),
+        (
+            "古典日本語下一段活用",
+            OldJapaneseConjugationType::ShimoIchidan,
+        ),
+        (
+            "古典日本語下二段活用",
+            OldJapaneseConjugationType::ShimoNidan,
+        ),
+        ("古典日本語四段活用", OldJapaneseConjugationType::Shodan),
+        ("古典日本語変格活用", OldJapaneseConjugationType::Irregular),
+        ("古典日本語ナリ活用", OldJapaneseConjugationType::Nari),
+        ("古典日本語タリ活用", OldJapaneseConjugationType::Tari),
+        ("古典日本語ク活用", OldJapaneseConjugationType::Ku),
+        ("古典日本語シク活用", OldJapaneseConjugationType::Shiku),
+    ] {
+        for body in template_bodies(text, name) {
+            let params = split_params(body);
+            if params.is_empty() {
+                continue;
+            }
+            let stem = clean_wikitext(params[0]);
+            let suffix = params
+                .get(1)
+                .map(|value| clean_wikitext(value))
+                .unwrap_or_default();
+            if !hiragana_only(&stem) || (!suffix.is_empty() && !hiragana_only(&suffix)) {
+                continue;
+            }
+            let conjugation = OldJapaneseConjugation {
+                stem,
+                suffix,
+                conjugation,
+            };
+            if !page.old_japanese_conjugations.contains(&conjugation) {
+                page.old_japanese_conjugations.push(conjugation);
+            }
         }
     }
 
@@ -939,6 +1022,83 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
         }
     }
     unique_entries
+}
+
+pub fn old_japanese_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
+    let mut entries = Vec::new();
+    for conjugation in &page.old_japanese_conjugations {
+        let dictionary_reading = format!("{}{}", conjugation.stem, conjugation.suffix);
+        let key = match conjugation.conjugation {
+            OldJapaneseConjugationType::Nari
+            | OldJapaneseConjugationType::Tari
+            | OldJapaneseConjugationType::Ku
+            | OldJapaneseConjugationType::Shiku => dictionary_reading,
+            _ => {
+                let Some(key) = old_japanese_okuri_key(conjugation) else {
+                    continue;
+                };
+                key
+            }
+        };
+        for candidate in old_japanese_candidates(page) {
+            entries.push(WiktionaryEntry {
+                reading: key.clone(),
+                candidate,
+                suru: false,
+                source: EntrySource::OldJapanese,
+            });
+        }
+    }
+    entries
+}
+
+fn old_japanese_okuri_key(conjugation: &OldJapaneseConjugation) -> Option<String> {
+    let final_kana = conjugation.suffix.chars().last()?;
+    let romaji = okuri_romaji(final_kana)?;
+    let mut key = conjugation.stem.clone();
+    key.push(romaji);
+    Some(key)
+}
+
+fn old_japanese_candidates(page: &JapanesePage) -> Vec<String> {
+    let mut candidates = Vec::new();
+    for title in &page.old_japanese_titles {
+        if !title.contains(is_kanji) {
+            continue;
+        }
+        let candidate = if let Some((stem, _)) = old_japanese_split_title(title) {
+            stem.to_string()
+        } else {
+            title.to_string()
+        };
+        if !candidate.is_empty() && !candidates.contains(&candidate) {
+            candidates.push(candidate);
+        }
+    }
+    if candidates.is_empty() && page.title.contains(is_kanji) {
+        let title = page.title.clone();
+        if let Some((stem, _)) = old_japanese_split_title(&title) {
+            candidates.push(stem.to_string());
+        } else {
+            candidates.push(title);
+        }
+    }
+    candidates
+}
+
+fn old_japanese_split_title(title: &str) -> Option<(&str, &str)> {
+    let boundary = title
+        .char_indices()
+        .rev()
+        .find(|(_, ch)| is_kanji(*ch))
+        .map(|(index, ch)| index + ch.len_utf8())
+        .unwrap_or(title.len());
+    let (stem, suffix) = title.split_at(boundary);
+    if suffix.is_empty() {
+        None
+    } else {
+        Some((stem, suffix))
+    }
 }
 
 fn okuri_candidate(page: &JapanesePage, candidate: &str) -> Option<WiktionaryEntry> {
@@ -1555,6 +1715,75 @@ mod tests {
         assert_eq!(
             render_segment("ぽんご", "ほん", "ほん", Some("ぽん")),
             Some(("ぽん".into(), "ご", false))
+        );
+    }
+    #[test]
+    fn parses_old_japanese_bracket_titles() {
+        let page = parse_japanese_page("あるく", "{{ojp-verb}}【[[歩]]く】");
+        assert_eq!(page.old_japanese_titles, vec!["歩く".to_string()]);
+    }
+
+    #[test]
+    fn parses_old_japanese_bare_titles() {
+        let page = parse_japanese_page("歩く", "{{ojp-verb|歩く}}");
+        assert_eq!(page.old_japanese_titles, vec!["歩く".to_string()]);
+    }
+
+    #[test]
+    fn parses_old_japanese_conjugations() {
+        let page = parse_japanese_page(
+            "あるく",
+            "{{ojp-verb}}【[[歩]]く】\n{{古典日本語四段活用|ある|く}}",
+        );
+        assert_eq!(
+            page.old_japanese_conjugations,
+            vec![OldJapaneseConjugation {
+                stem: "ある".into(),
+                suffix: "く".into(),
+                conjugation: OldJapaneseConjugationType::Shodan,
+            }]
+        );
+    }
+
+    #[test]
+    fn generates_old_japanese_okuri_entry() {
+        let page = parse_japanese_page(
+            "あるく",
+            "{{ojp-verb}}【[[歩]]く】\n{{古典日本語四段活用|ある|く}}",
+        );
+        assert_eq!(
+            old_japanese_entries(&page),
+            vec![WiktionaryEntry {
+                reading: "あるk".into(),
+                candidate: "歩".into(),
+                suru: false,
+                source: EntrySource::OldJapanese,
+            }]
+        );
+    }
+
+    #[test]
+    fn generates_old_japanese_adjective_entry() {
+        let page = parse_japanese_page(
+            "とし",
+            "{{ojp-adj}}【[[疾]]し・[[敏]]し】\n{{古典日本語ク活用|と}}",
+        );
+        assert_eq!(
+            old_japanese_entries(&page),
+            vec![
+                WiktionaryEntry {
+                    reading: "と".into(),
+                    candidate: "疾".into(),
+                    suru: false,
+                    source: EntrySource::OldJapanese,
+                },
+                WiktionaryEntry {
+                    reading: "と".into(),
+                    candidate: "敏".into(),
+                    suru: false,
+                    source: EntrySource::OldJapanese,
+                },
+            ]
         );
     }
 }

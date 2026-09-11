@@ -89,12 +89,16 @@ generate() {
             --mapping kanji_readings.tsv \
             --output tmp.wiktionary \
             --jion-output tmp.wiktionary.jion \
+            --ojp-output tmp.ojp \
             --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
         cat header.txt > SKK-JISYO.shikakugoma
         cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
         cat header.txt > SKK-JISYO.wiktionary
         cat tmp.wiktionary | skkdic-sort | skkdic-expr2 >> SKK-JISYO.wiktionary
+        echo "Generating ojp dictionary"
+        cat header.txt > SKK-JISYO.ojp
+        cat tmp.ojp | skkdic-sort | skkdic-expr2 >> SKK-JISYO.ojp
         echo "Generating jion dictionary"
         cat header.txt > SKK-JISYO.jion
         cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 >> SKK-JISYO.jion

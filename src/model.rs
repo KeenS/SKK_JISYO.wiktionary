@@ -8,17 +8,54 @@ pub struct Page {
 
 impl Page {
     pub fn japanese_text(&self) -> Option<&str> {
-        let start = [
-            "=={{L|ja}}==",
-            "== {{L|ja}} ==",
-            "=={{ja}}==",
-            "== {{ja}} ==",
+        let start = self.find_language_start("ja")?;
+        let end = self.next_language_section_offset(start);
+        let section = &self.revision.text[start..end];
+        Some(section.strip_suffix('\n').unwrap_or(section))
+    }
+
+    pub fn old_japanese_text_with_default_sort(&self) -> Option<String> {
+        let start = self.find_language_start("ojp")?;
+        let end = self.next_language_section_offset(start + 1);
+        let section = &self.revision.text[start..end];
+        Some(format!(
+            "{}{}",
+            self.default_sort_prefix(start),
+            section.strip_suffix('\n').unwrap_or(section)
+        ))
+    }
+
+    fn find_language_start(&self, language: &str) -> Option<usize> {
+        let marked = format!("=={{{{{language}}}}}==");
+        let marked_spaced = format!("== {{{{{language}}}}} ==");
+        let linked = format!("=={{{{L|{language}}}}}==");
+        let linked_spaced = format!("== {{{{L|{language}}}}} ==");
+        [
+            linked,
+            linked_spaced,
+            marked,
+            marked_spaced,
+            if language == "ojp" {
+                "==古典日本語==".to_string()
+            } else {
+                String::new()
+            },
+            if language == "ojp" {
+                "== 古典日本語 ==".to_string()
+            } else {
+                String::new()
+            },
         ]
         .into_iter()
-        .filter_map(|marker| self.revision.text.find(marker))
-        .min()?;
-        let end = self.next_language_section_offset(start);
-        Some(&self.revision.text[start..end])
+        .filter(|marker| !marker.is_empty())
+        .filter_map(|marker| {
+            self.revision
+                .text
+                .find(marker.as_str())
+                .map(|start| (start, marker))
+        })
+        .min_by_key(|(start, _)| *start)
+        .map(|(start, _)| start)
     }
 
     fn next_language_section_offset(&self, start: usize) -> usize {
@@ -127,6 +164,36 @@ mod tests {
         assert_eq!(
             page(text).japanese_text_with_default_sort().unwrap(),
             "=={{ja}}==\n{{DEFAULTSORT:しめんそか}}\n{{ja-idiom|しめんそか}}"
+        );
+    }
+
+    #[test]
+    fn extracts_old_japanese_sections() {
+        let text = "=={{ja}}==\n現代\n\n=={{L|ojp}}==\n古語\n\n==日本手話==\n手話";
+        let page = page(text);
+        assert_eq!(
+            page.old_japanese_text_with_default_sort().unwrap(),
+            "=={{L|ojp}}==\n古語"
+        );
+    }
+
+    #[test]
+    fn extracts_unmarked_old_japanese_section() {
+        let text = "== 古典日本語 ==\n{{ojp-verb}}【[[歩]]く】\n==日本手話==";
+        let page = page(text);
+        assert_eq!(
+            page.old_japanese_text_with_default_sort().unwrap(),
+            "== 古典日本語 ==\n{{ojp-verb}}【[[歩]]く】"
+        );
+    }
+
+    #[test]
+    fn old_japanese_section_keeps_defaultsort() {
+        let text = "{{DEFAULTSORT:あるく}}\n=={{ja}}==\n現代\n=={{L|ojp}}==\n古語";
+        let page = page(text);
+        assert_eq!(
+            page.old_japanese_text_with_default_sort().unwrap(),
+            "{{DEFAULTSORT:あるく}}\n=={{L|ojp}}==\n古語"
         );
     }
 
