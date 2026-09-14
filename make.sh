@@ -10,6 +10,8 @@ SYNOPSIS:
   $0 CATLINK ARTICLES
   $0 [-h|--help]
   $0 [--verbose]
+  $0 --gsi PDF_TEXT
+  $0 --gsi
 
 DESCRIPTION:
   Generate dictionaries from Wiktionary. Give CATLINK as
@@ -18,6 +20,9 @@ DESCRIPTION:
 
   -h  --help      Print this help.
       --verbose   Enables verbose mode.
+      --gsi       Generate only SKK-JISYO.gsi. With PDF_TEXT, use an
+                  existing pdftotext output; otherwise download the
+                  official Gazetteer of Japan PDF and extract it.
 
 EXAMPLE:
   $ $0
@@ -39,6 +44,13 @@ check_dependencies() {
     check_dependency docker
     check_dependency cargo
     check_dependency skkdic-sort
+}
+
+check_gsi_dependencies() {
+    check_dependency cargo
+    check_dependency pdftotext
+    check_dependency skkdic-sort
+    check_dependency skkdic-expr2
 }
 
 fetch_data() {
@@ -65,6 +77,31 @@ sort_candidates() {
         --xml "$ARTICLES" \
         --input "$input" \
         --output "$output"
+}
+
+fetch_gsi_data() {
+    (
+        cd "$SCRIPT_DIR/data"
+        echo "Fetching Gazetteer of Japan"
+        wget -N -O gazetteer-of-japan.pdf \
+             https://www.gsi.go.jp/common/000238259.pdf
+        echo "Extracting Gazetteer of Japan text"
+        pdftotext -layout gazetteer-of-japan.pdf gazetteer-of-japan.txt
+    )
+}
+
+generate_gsi() {
+    (
+        cd "$SCRIPT_DIR"
+        echo "Checking GSI dependencies"
+        check_gsi_dependencies
+        echo "Generating GSI dictionary"
+        cargo run --release --bin gsi -- \
+            "$GSI_TEXT" \
+            tmp.gsi
+        cat gsi-header.txt > SKK-JISYO.gsi
+        skkdic-sort < tmp.gsi | skkdic-expr2 >> SKK-JISYO.gsi
+    )
 }
 
 generate() {
@@ -128,8 +165,20 @@ main() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            --help) usage; exit 0;;
-            --verbose) set -x; shift;;
+        --help) usage; exit 0;;
+        --verbose) set -x; shift;;
+        --gsi)
+            shift
+            if [ $# -gt 0 ]; then
+                GSI_TEXT=$1
+                shift
+            else
+                fetch_gsi_data
+                GSI_TEXT=data/gazetteer-of-japan.txt
+            fi
+            generate_gsi
+            exit 0
+            ;;
             --) shift; break;;
             -*)
                 OPTIND=1

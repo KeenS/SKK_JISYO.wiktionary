@@ -7,6 +7,20 @@ pub struct Page {
 }
 
 impl Page {
+    pub fn is_symbol_title(&self) -> bool {
+        self.title
+            .chars()
+            .all(|ch| !ch.is_alphanumeric() && !is_kanji(ch))
+    }
+
+    pub fn symbol_text(&self) -> Option<&str> {
+        if self.is_symbol_title() {
+            Some(&self.revision.text)
+        } else {
+            None
+        }
+    }
+
     pub fn japanese_text(&self) -> Option<&str> {
         let start = self.find_language_start("ja")?;
         let end = self.next_language_section_offset(start);
@@ -114,6 +128,10 @@ impl Page {
             &self.revision.text[start..end]
         ))
     }
+}
+
+fn is_kanji(ch: char) -> bool {
+    matches!(ch, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}')
 }
 
 #[cfg(test)]

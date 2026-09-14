@@ -14,6 +14,7 @@ use super::segmentation::Segment;
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct JapanesePage {
     pub title: String,
+    pub furigana_readings: Vec<String>,
     pub default_sorts: Vec<String>,
     pub kanji_template_readings: Vec<String>,
     pub wagokanji_sources: Vec<WagokanjiSource>,
@@ -106,6 +107,7 @@ pub struct WiktionaryEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntrySource {
+    Symbol,
     KanjiWord,
     KanjiReading,
     Idiom,
@@ -244,6 +246,17 @@ fn split_params(body: &str) -> Vec<&str> {
     body.split('|').map(str::trim).collect()
 }
 
+fn furigana_pair(body: &str) -> Option<(String, String)> {
+    let mut params = split_params(body);
+    let reading = params.pop()?;
+    let reading = clean_wikitext(reading);
+    if !hiragana_only(&reading) {
+        return None;
+    }
+    let word = params.last().map(|word| clean_wikitext(word))?;
+    Some((word, reading))
+}
+
 fn clean_wikitext(value: &str) -> String {
     value
         .trim_matches(['[', ']', ' '])
@@ -264,6 +277,12 @@ fn kana_only(value: &str) -> bool {
 
 pub fn is_kanji(ch: char) -> bool {
     matches!(ch, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}')
+}
+
+pub fn is_symbol(title: &str) -> bool {
+    title
+        .chars()
+        .all(|ch| !ch.is_alphanumeric() && !is_kanji(ch))
 }
 
 static KANJITAB_REGEX: Lazy<Regex> =
@@ -317,6 +336,14 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         title: title.to_string(),
         ..JapanesePage::default()
     };
+
+    for body in template_bodies(text, "ふりがな") {
+        if let Some((_, reading)) = furigana_pair(body) {
+            if hiragana_only(&reading) && !page.furigana_readings.contains(&reading) {
+                page.furigana_readings.push(reading);
+            }
+        }
+    }
 
     for body in default_sort_bodies(text) {
         for reading in default_sort_readings(title, &body) {
@@ -914,6 +941,16 @@ pub fn kanji_word_entries(
 
 pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     let mut entries = Vec::new();
+    if is_symbol(&page.title) {
+        for reading in &page.furigana_readings {
+            entries.push(WiktionaryEntry {
+                reading: reading.clone(),
+                candidate: page.title.clone(),
+                suru: false,
+                source: EntrySource::Symbol,
+            });
+        }
+    }
     if kana_only(&page.title) {
         for candidate in &page.kangokana_candidates {
             entries.push(WiktionaryEntry {

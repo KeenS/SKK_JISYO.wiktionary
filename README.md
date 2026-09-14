@@ -1,11 +1,19 @@
-# SKKのWiktionary辞書
-このリポジトリは日本語版Wiktionaryから生成したいくつかの辞書が含まれています。
+# SKKのWiktionary・地名辞書
+このリポジトリは日本語版Wiktionaryと国土地理院の地名データから生成したいくつかの辞書が含まれています。
 
 * SKK-JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
 * SKK-JISYO.shikakugoma: 四角号碼の変換辞書です
 * SKK-JISYO.jion: 字音仮名遣いで変換する辞書です
 * SKK-JISYO.ojp: 古典日本語（歴史的仮名遣い）の変換辞書です
+* SKK-JISYO.gsi: 地名集日本から生成した地名の変換辞書です
 
+# ライセンス
+
+* Wiktionary由来の辞書はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)で提供されます。
+* `SKK-JISYO.gsi` は国土地理院のデータを加工して生成しており、公共データ利用規約（第1.0版）に基づき[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)互換の条件で提供されます。
+* その他のコード類はMITライセンスです。
+
+# 辞書について
 ## SKKのWiktionary辞書
 ### これは何？
 
@@ -15,11 +23,27 @@ SKK-JISYO.Lとの違いは以下の通りです。
 |            | .L     | .wiktionary  |
 |------------|--------|--------------|
 | ライセンス | GPL    | CC BY-SA 4.0 |
-| エントリ数 | 約18万 | 約5.5万       |
+| エントリ数 | 約18万 | 約6.0万       |
 
 ### 使い方
 
 通常のSKK辞書として使えます。
+
+## SKKの地名辞書
+### これは何？
+
+`SKK-JISYO.gsi` は国土地理院・海上保安庁海洋情報部の [地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)（2021年版）から生成したSKK辞書です。行政地名のほか、山、川、湖沼、海域、海底地形などの地名を含みます。Wiktionaryでは地名は網羅されていないのでSKK-JISYO.wiktionaryの補助的な辞書として使うことを意図しています。.wiktionaryとはライセンスが異なるので再配布の際はご注意下さい。
+
+行政地名からは正式名称に加えて、 `中津市` のような `市` `町` `村` `郡` `区` などの接尾語を除いた表記も登録します。たとえば次の両方を変換できます。
+
+```text
+なかつ /中津/
+なかつし /中津市/
+```
+
+### 使い方
+
+通常のSKK辞書として使えます。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
 
 ## SKKの四角号碼辞書
 ### これは何？
@@ -73,7 +97,7 @@ SKK-JISYO.shikakugomaはSKKで使える[四角号碼](https://ja.wikipedia.org/w
 
 ### 使い方
 
-通常のSKK辞書として使えます。古典日本語の語彙だけを含むため、現代日本語用の`SKK-JISYO.wiktionary`の補助辞書という位置付けです。。
+通常のSKK辞書として使えます。古典日本語の語彙だけを含むため、現代日本語用の`SKK-JISYO.wiktionary`の補助辞書という位置付けです。
 
 ## SKKの字音仮名遣い辞書
 ### これは何？
@@ -105,17 +129,18 @@ SKK-JISYO.jionはSKKで[字音仮名遣い](https://ja.wikipedia.org/wiki/%E5%AD
 
 wiktionaryに載っている古音から生成しているので、原義の字音仮名遣いとはずれがあると思われます。
 
-# ライセンス
-
-* 辞書はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/3.0/deed.ja)で提供されます。
-* その他のコード類はMITライセンスです。
-
 # 自分で生成する
 
 自分でデータを生成する人のために手順を示す。簡単には以下のコマンドでwiktionaryからデータをダウンロードし、辞書の生成までできる。
 
 ``` console
 $ ./make.sh
+```
+
+国土地理院のデータをダウンロードし、生成するには以下のコマンドを使う。
+
+``` console
+$ ./make.sh --gsi
 ```
 
 既にデータをダウンロードしてあるならそれを使うこともできる。
@@ -125,9 +150,22 @@ $ ./make.sh path/to/jawiktionary-latest-categorylinks.sql path/to/jawiktionary-l
 ```
 
 
+国土地理院の辞書は[地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)をダウンロードしてあるなら、一度PDFからテキストを抽出しておく
+
+``` console
+$ pdftotext -layout /path/to/data.pdf data/gazetteer-of-japan.txt
+```
+
+そのあとテキストファイルを指定して `make.sh` を使う
+
+``` console
+$ ./make.sh --gsi data/gazetteer-of-japan.txt
+```
+
+
 `make.sh` を使わずに生成する場合は以下の手順を踏む。
 
-### データの取得
+### Wikitonaryデータの取得
 
 [Wikimediaプロジェクトのダンプ](https://dumps.wikimedia.org/backup-index.html)のjawikitonaryの最新版にいく。そこから必要なデータをダウンロードする。必要なデータは以下の2つ。
 
@@ -214,9 +252,9 @@ cargo run --release --bin sort_candidates -- \
      --output SKK-JISYO.jion
 ```
 
-`sort_candidates` は日本語版Wiktionaryの日本語セクション内での内部リンク回数を候補の使用頻度の近似値として使い、変換候補を多い順に並べ替えます。リンクされていない候補は元の順序を保ったまま後ろに置きます。
+`sort_candidates` は日本語版Wiktionaryの日本語セクション内での内部リンク回数を候補の使用頻度の近似値として使い、変換候補を多い順に並べ替える。リンクされていない候補は元の順序を保ったまま後ろに置く。
 
-カレントディレクトリに辞書ができます。
+カレントディレクトリに辞書ができる。
 
 ```console
 $ ls SKK-JISYO.*
@@ -239,9 +277,47 @@ $ head output.log
 鉃: no match
 ```
 
+中間生成ファイルは削除しておく
+
 
 ``` console
 $ rm tmp.shikakugoma tmp.jion ids.txt
+```
+
+### 地名辞書データのダウンロードとテキスト抽出
+[地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)のpdfデータをdata/にダウンロードしておく
+
+``` console
+$ wget -N -O gazetteer-of-japan.pdf https://www.gsi.go.jp/common/000238259.pdf
+```
+
+そこからテキストデータを抽出する
+
+``` console
+$ pdftotext -layout data/gazetteer-of-japan.pdf data/gazetteer-of-japan.txt
+```
+
+### 地名辞書の生成
+
+コマンドを使って辞書を生成する
+
+``` console
+$ cargo run --release --bin gsi -- data/gazetteer-of-japan.txt tmp.gsi
+$ cat gsi-header.txt > SKK-JISYO.gsi
+$ skkdic-sort < tmp.gsi | skkdic-expr2 >> SKK-JISYO.gsi
+```
+
+辞書ができる
+
+``` console
+$ ls SKK-JISYO.gsi
+SKK-JISYO.gsi
+```
+
+中間生成ファイルは削除しておく
+
+``` console
+$ rm tmp.gsi
 ```
 
 # Future Work

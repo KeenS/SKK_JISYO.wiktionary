@@ -71,6 +71,7 @@ mod tests {
             idiom_entries: 0,
             kangokana_entries: 0,
             redirect_entries: 0,
+            symbol_entries: 1,
             jion_entries: 3,
             ojp_entries: 0,
             shared_entries: 1,
@@ -164,6 +165,7 @@ struct Report {
     idiom_entries: usize,
     kangokana_entries: usize,
     redirect_entries: usize,
+    symbol_entries: usize,
     jion_entries: usize,
     ojp_entries: usize,
     shared_entries: usize,
@@ -186,6 +188,7 @@ impl Report {
                 EntrySource::Kangokana => self.kangokana_entries += 1,
                 EntrySource::OldJapanese => self.ojp_entries += 1,
                 EntrySource::Redirect => self.redirect_entries += 1,
+                EntrySource::Symbol => self.symbol_entries += 1,
             }
         }
     }
@@ -404,6 +407,16 @@ fn run(options: Options) -> io::Result<()> {
     let mut report = Report::default();
 
     for page in articles(&options.xml) {
+        if let Some(text) = page.symbol_text() {
+            let parsed = parse_japanese_page(page.title.as_str(), text);
+            let entries = wiktionary_entries(&parsed);
+            report.add_entries(&entries);
+            for entry in entries.iter().map(to_entry) {
+                output_entries.insert(entry_key(&entry), entry);
+            }
+            continue;
+        }
+
         if let Some(text) = page.old_japanese_text_with_default_sort() {
             let parsed = parse_japanese_page(page.title.as_str(), &text);
             let entries = old_japanese_entries(&parsed);
@@ -517,6 +530,7 @@ fn write_report(path: PathBuf, report: &Report) -> io::Result<()> {
     writeln!(writer, "idiom_entries\t{}", report.idiom_entries)?;
     writeln!(writer, "kangokana_entries\t{}", report.kangokana_entries)?;
     writeln!(writer, "redirect_entries\t{}", report.redirect_entries)?;
+    writeln!(writer, "symbol_entries\t{}", report.symbol_entries)?;
     writeln!(writer, "jion_entries\t{}", report.jion_entries)?;
     writeln!(writer, "ojp_entries\t{}", report.ojp_entries)?;
     writeln!(writer, "shared_entries\t{}", report.shared_entries)?;
