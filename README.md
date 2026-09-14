@@ -227,28 +227,28 @@ $ cargo run --release --bin wiktionary_jisyo -- \
 
 ``` console
 # wiktionary辞書
-$ cat header.txt > SKK-JISYO.wiktionary
 $ cat tmp.wiktionary | skkdic-sort | skkdic-expr2 > tmp.wiktionary.sorted
+$ cat header.txt tmp.wiktionary.sorted > tmp.wiktionary.headered
 $ cargo run --release --bin sort_candidates -- \
      --xml jawiktionary-*-pages-articles.xml \
-     --input tmp.wiktionary.sorted \
+     --input tmp.wiktionary.headered \
      --output SKK-JISYO.wiktionary
 # 古典日本語辞書
-$ cat header.txt > SKK-JISYO.ojp
 $ cat tmp.ojp | skkdic-sort | skkdic-expr2 > tmp.ojp.sorted
+$ cat header.txt tmp.ojp.sorted > tmp.ojp.headered
 $ cargo run --release --bin sort_candidates -- \
      --xml jawiktionary-*-pages-articles.xml \
-     --input tmp.ojp.sorted \
+     --input tmp.ojp.headered \
      --output SKK-JISYO.ojp
 # 四角号碼辞書
-$ cat header.txt > SKK-JISYO.shikakugoma
-$ cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
+$ cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 > tmp.shikakugoma.sorted
+$ cat header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
 # 字音
-cat header.txt > SKK-JISYO.jion
 cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 > tmp.jion.sorted
+cat header.txt tmp.jion.sorted > tmp.jion.headered
 cargo run --release --bin sort_candidates -- \
      --xml jawiktionary-*-pages-articles.xml \
-     --input tmp.jion.sorted \
+     --input tmp.jion.headered \
      --output SKK-JISYO.jion
 ```
 
@@ -303,8 +303,8 @@ $ pdftotext -layout data/gazetteer-of-japan.pdf data/gazetteer-of-japan.txt
 
 ``` console
 $ cargo run --release --bin gsi -- data/gazetteer-of-japan.txt tmp.gsi
-$ cat gsi-header.txt > SKK-JISYO.gsi
-$ skkdic-sort < tmp.gsi | skkdic-expr2 >> SKK-JISYO.gsi
+$ skkdic-sort < tmp.gsi | skkdic-expr2 > tmp.gsi.sorted
+$ cat gsi-header.txt tmp.gsi.sorted > SKK-JISYO.gsi
 ```
 
 辞書ができる

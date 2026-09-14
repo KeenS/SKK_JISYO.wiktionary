@@ -15,6 +15,7 @@ use super::segmentation::Segment;
 pub struct JapanesePage {
     pub title: String,
     pub furigana_readings: Vec<String>,
+    pub okurigana_sources: Vec<OkuriganaSource>,
     pub default_sorts: Vec<String>,
     pub kanji_template_readings: Vec<String>,
     pub wagokanji_sources: Vec<WagokanjiSource>,
@@ -36,6 +37,12 @@ pub struct JapanesePage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WagokanjiSource {
+    pub candidate: String,
+    pub reading: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OkuriganaSource {
     pub candidate: String,
     pub reading: String,
 }
@@ -257,6 +264,41 @@ fn furigana_pair(body: &str) -> Option<(String, String)> {
     Some((word, reading))
 }
 
+fn okurigana_source(body: &str) -> Option<OkuriganaSource> {
+    let params = split_params(body);
+    let reading = params.last()?.trim();
+    let reading = clean_wikitext(reading);
+    if !hiragana_only(&reading) {
+        return None;
+    }
+
+    let mut candidate = String::new();
+    let mut reading_index = 0;
+    for param in params.iter().take(params.len().saturating_sub(1)) {
+        let param = param.trim();
+        if param.is_empty() || param.contains('=') {
+            continue;
+        }
+        let param = clean_wikitext(param);
+        if param.chars().any(is_kanji) {
+            candidate.push_str(&param);
+        } else if hiragana_only(&param) {
+            let next = reading
+                .get(reading_index..reading_index + param.len())
+                .unwrap_or("");
+            if next != param {
+                return None;
+            }
+            reading_index += param.len();
+        }
+    }
+
+    if candidate.is_empty() || reading_index != reading.len() {
+        return None;
+    }
+    Some(OkuriganaSource { candidate, reading })
+}
+
 fn clean_wikitext(value: &str) -> String {
     value
         .trim_matches(['[', ']', ' '])
@@ -341,6 +383,16 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         if let Some((_, reading)) = furigana_pair(body) {
             if hiragana_only(&reading) && !page.furigana_readings.contains(&reading) {
                 page.furigana_readings.push(reading);
+            }
+        }
+    }
+
+    for name in ["おくりがな", "おくりがな2", "おくりがな3"] {
+        for body in template_bodies(text, name) {
+            if let Some(source) = okurigana_source(body) {
+                if !page.okurigana_sources.contains(&source) {
+                    page.okurigana_sources.push(source);
+                }
             }
         }
     }
@@ -1046,6 +1098,11 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             entries.push(entry);
         }
     }
+    for source in &page.okurigana_sources {
+        if let Some(entry) = okurigana_source_entry(source) {
+            entries.push(entry);
+        }
+    }
     if page.title.chars().any(is_kanji) && !page.title.ends_with("する") {
         for reading in &page.suru_readings {
             entries.push(WiktionaryEntry {
@@ -1257,6 +1314,28 @@ fn wago_source_entry(source: &WagokanjiSource) -> Option<WiktionaryEntry> {
     let mut key = String::with_capacity(stem_reading.len() + 1);
     key.push_str(stem_reading);
     key.push(romaji);
+    Some(WiktionaryEntry {
+        reading: key,
+        candidate: stem.to_string(),
+        suru: false,
+        source: EntrySource::WagoOkuri,
+    })
+}
+
+fn okurigana_source_entry(source: &OkuriganaSource) -> Option<WiktionaryEntry> {
+    let (stem, suffix) = split_candidate(&source.candidate);
+    if stem.is_empty() || suffix.is_empty() {
+        return None;
+    }
+    let stem_reading = source
+        .reading
+        .strip_suffix(&suffix)
+        .filter(|reading| !reading.is_empty())?;
+    let romaji = okuri_romaji(suffix.chars().next()?)?;
+    let mut key = String::with_capacity(stem_reading.len() + 1);
+    key.push_str(stem_reading);
+    key.push(romaji);
+
     Some(WiktionaryEntry {
         reading: key,
         candidate: stem.to_string(),

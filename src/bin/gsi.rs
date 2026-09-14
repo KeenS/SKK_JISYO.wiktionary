@@ -16,7 +16,6 @@ fn main() -> io::Result<()> {
     let pdf_text = fs::read_to_string(input)?;
     let jisyo = generate_jisyo(&pdf_text);
     let mut writer = io::BufWriter::new(fs::File::create(output)?);
-    writer.write_all(include_bytes!("../../gsi-header.txt"))?;
     jisyo.write(&mut writer)?;
     writer.flush()
 }

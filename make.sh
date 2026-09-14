@@ -99,8 +99,8 @@ generate_gsi() {
         cargo run --release --bin gsi -- \
             "$GSI_TEXT" \
             tmp.gsi
-        cat gsi-header.txt > SKK-JISYO.gsi
-        skkdic-sort < tmp.gsi | skkdic-expr2 >> SKK-JISYO.gsi
+        skkdic-sort < tmp.gsi | skkdic-expr2 > tmp.gsi.sorted
+        cat gsi-header.txt tmp.gsi.sorted > SKK-JISYO.gsi
     )
 }
 
@@ -138,22 +138,22 @@ generate() {
             --ojp-output tmp.ojp \
             --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
-        cat header.txt > SKK-JISYO.shikakugoma
-        cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
+        cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 > tmp.shikakugoma.sorted
+        cat header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
 
-        cat header.txt > SKK-JISYO.wiktionary
         cat tmp.wiktionary | skkdic-sort | skkdic-expr2 > tmp.wiktionary.sorted
-        sort_candidates tmp.wiktionary.sorted SKK-JISYO.wiktionary
+        cat header.txt tmp.wiktionary.sorted > tmp.wiktionary.headered
+        sort_candidates tmp.wiktionary.headered SKK-JISYO.wiktionary
 
         echo "Generating ojp dictionary"
-        cat header.txt > SKK-JISYO.ojp
         cat tmp.ojp | skkdic-sort | skkdic-expr2 > tmp.ojp.sorted
-        sort_candidates tmp.ojp.sorted SKK-JISYO.ojp
+        cat header.txt tmp.ojp.sorted > tmp.ojp.headered
+        sort_candidates tmp.ojp.headered SKK-JISYO.ojp
 
         echo "Generating jion dictionary"
-        cat header.txt > SKK-JISYO.jion
         cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 > tmp.jion.sorted
-        sort_candidates tmp.jion.sorted SKK-JISYO.jion
+        cat header.txt tmp.jion.sorted > tmp.jion.headered
+        sort_candidates tmp.jion.headered SKK-JISYO.jion
         echo "Cleaning up"
         rm tmp.* ids.txt
     )
