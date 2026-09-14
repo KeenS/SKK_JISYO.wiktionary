@@ -58,6 +58,15 @@ fetch_data() {
     )
 }
 
+sort_candidates() {
+    input=$1
+    output=$2
+    cargo run --release --bin sort_candidates -- \
+        --xml "$ARTICLES" \
+        --input "$input" \
+        --output "$output"
+}
+
 generate() {
     (
         cd "$SCRIPT_DIR"
@@ -94,14 +103,20 @@ generate() {
         echo "Generating dictionaries"
         cat header.txt > SKK-JISYO.shikakugoma
         cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
+
         cat header.txt > SKK-JISYO.wiktionary
-        cat tmp.wiktionary | skkdic-sort | skkdic-expr2 >> SKK-JISYO.wiktionary
+        cat tmp.wiktionary | skkdic-sort | skkdic-expr2 > tmp.wiktionary.sorted
+        sort_candidates tmp.wiktionary.sorted SKK-JISYO.wiktionary
+
         echo "Generating ojp dictionary"
         cat header.txt > SKK-JISYO.ojp
-        cat tmp.ojp | skkdic-sort | skkdic-expr2 >> SKK-JISYO.ojp
+        cat tmp.ojp | skkdic-sort | skkdic-expr2 > tmp.ojp.sorted
+        sort_candidates tmp.ojp.sorted SKK-JISYO.ojp
+
         echo "Generating jion dictionary"
         cat header.txt > SKK-JISYO.jion
-        cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 >> SKK-JISYO.jion
+        cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 > tmp.jion.sorted
+        sort_candidates tmp.jion.sorted SKK-JISYO.jion
         echo "Cleaning up"
         rm tmp.* ids.txt
     )

@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+pub mod candidate_order;
 pub mod jion;
 pub mod model;
 

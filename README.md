@@ -190,17 +190,31 @@ $ cargo run --release --bin wiktionary_jisyo -- \
 ``` console
 # wiktionary辞書
 $ cat header.txt > SKK-JISYO.wiktionary
-$ cat tmp.wiktionary | skkdic-sort | skkdic-expr2 >> SKK-JISYO.wiktionary
+$ cat tmp.wiktionary | skkdic-sort | skkdic-expr2 > tmp.wiktionary.sorted
+$ cargo run --release --bin sort_candidates -- \
+     --xml jawiktionary-*-pages-articles.xml \
+     --input tmp.wiktionary.sorted \
+     --output SKK-JISYO.wiktionary
 # 古典日本語辞書
 $ cat header.txt > SKK-JISYO.ojp
-$ cat tmp.ojp | skkdic-sort | skkdic-expr2 >> SKK-JISYO.ojp
+$ cat tmp.ojp | skkdic-sort | skkdic-expr2 > tmp.ojp.sorted
+$ cargo run --release --bin sort_candidates -- \
+     --xml jawiktionary-*-pages-articles.xml \
+     --input tmp.ojp.sorted \
+     --output SKK-JISYO.ojp
 # 四角号碼辞書
 $ cat header.txt > SKK-JISYO.shikakugoma
 $ cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 >> SKK-JISYO.shikakugoma
 # 字音
 cat header.txt > SKK-JISYO.jion
-cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 >> SKK-JISYO.jion
+cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 > tmp.jion.sorted
+cargo run --release --bin sort_candidates -- \
+     --xml jawiktionary-*-pages-articles.xml \
+     --input tmp.jion.sorted \
+     --output SKK-JISYO.jion
 ```
+
+`sort_candidates` は日本語版Wiktionaryの日本語セクション内での内部リンク回数を候補の使用頻度の近似値として使い、変換候補を多い順に並べ替えます。リンクされていない候補は元の順序を保ったまま後ろに置きます。
 
 カレントディレクトリに辞書ができます。
 

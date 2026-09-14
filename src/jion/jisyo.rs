@@ -22,10 +22,7 @@ pub fn parse_line(line: &str) -> Option<Entry> {
     }
     let (reading, candidates) = line.split_once(" /")?;
     let candidates = candidates.strip_suffix('/')?;
-    let mut parts = candidates.split(';');
-    let head = parts.next()?.trim();
-    let annotations = parts.map(str::to_string).collect::<Vec<_>>();
-    let candidates = head
+    let candidate_annotations = candidates
         .split('/')
         .filter(|candidate| !candidate.is_empty())
         .map(str::to_string)
@@ -33,11 +30,10 @@ pub fn parse_line(line: &str) -> Option<Entry> {
     if reading.is_empty() || candidates.is_empty() {
         return None;
     }
-    Some(Entry {
-        reading: reading.to_string(),
-        candidates,
-        annotations,
-    })
+    Some(Entry::from_candidate_annotations(
+        reading,
+        candidate_annotations,
+    ))
 }
 
 pub fn write_jisyo(path: impl AsRef<Path>, entries: &[Entry]) -> io::Result<()> {
