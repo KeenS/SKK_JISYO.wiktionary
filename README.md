@@ -320,7 +320,10 @@ SKK-JISYO.gsi
 $ rm tmp.gsi
 ```
 
+# 自動更新
+
+GitHub Actions で毎月 1 回辞書を再生成しています。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
+
 # Future Work
 
-* 自動更新
 * 例外辞書の整備

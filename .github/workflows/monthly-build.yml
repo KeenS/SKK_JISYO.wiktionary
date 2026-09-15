@@ -1,0 +1,78 @@
+# 毎月 1 回、Wiktionary の最新ダンプと国土地理院の地名集から
+# 辞書を再生成してコミットする。
+name: Monthly build
+
+on:
+  schedule:
+    # GitHub Actions の cron は UTC で評価される。
+    # 日本時間 (JST) の毎月 16 日 09:00 = UTC の毎月 16 日 00:00。
+    # 月の半ばに実行することで、月次処理が集中する月初めの負荷を避ける。
+    # GitHub スケジュール実行は最大数分遅れることがある。
+    - cron: "0 0 16 * *"
+  # 手動実行も許可する。ブラウザーの Run workflow ボタンから使える。
+  workflow_dispatch:
+
+# スケジュール実行に GITHUB_TOKEN は不要なので読み取り専用に絞る。
+# 書き込みは build ジョブだけに許可する。
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Wiktionary ダンプのダウンロード、展開、MySQL へのインポート、
+    # 辞書の生成を含むため長めに取る。
+    timeout-minutes: 360
+    permissions:
+      # 生成した辞書を同じブランチにコミットするために必要。
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Generate dictionaries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils skktools
+          ./make.sh --gsi
+          ./make.sh
+
+      - name: Check for updates
+        id: update
+        run: |
+          git add SKK-JISYO.gsi SKK-JISYO.wiktionary SKK-JISYO.jion SKK-JISYO.ojp SKK-JISYO.shikakugoma
+          if git diff --cached --quiet; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit dictionaries
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "update dictionary"
+
+      # credentials を checkout に保存せず、GITHUB_TOKEN を明示して push する。
+      # scheduled 実行の GITHUB_REF_NAME は default branch を指す。
+      - name: Push updates
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:"${GITHUB_REF_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload dictionary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictionaries
+          path: |
+            SKK-JISYO.gsi
+            SKK-JISYO.wiktionary
+            SKK-JISYO.jion
+            SKK-JISYO.ojp
+            SKK-JISYO.shikakugoma
+          retention-days: 30

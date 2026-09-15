@@ -63,7 +63,7 @@ fetch_data() {
         echo "Decompressing data"
         if [ $(find . -mmin -5 | wc -l) = 0 ] ; then
             echo "No new update"
-            return 1
+            return 0
         fi
         zcat  jawiktionary-latest-categorylinks.sql.gz   > jawiktionary-latest-categorylinks.sql
         bzcat jawiktionary-latest-pages-articles.xml.bz2 > jawiktionary-latest-pages-articles.xml
@@ -197,7 +197,7 @@ main() {
         CATLINK="$1"
         ARTICLES="$2"
     else
-        fetch_data || exit 1
+        fetch_data
         CATLINK=data/jawiktionary-latest-categorylinks.sql
         ARTICLES=data/jawiktionary-latest-pages-articles.xml
     fi
