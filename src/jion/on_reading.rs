@@ -115,7 +115,7 @@ fn parse_named_readings(params: &str, name: &str) -> Vec<String> {
     readings
 }
 
-fn katakana_to_hiragana(value: &str) -> String {
+pub fn katakana_to_hiragana(value: &str) -> String {
     value
         .chars()
         .map(|ch| {

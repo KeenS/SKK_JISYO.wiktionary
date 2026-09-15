@@ -9,6 +9,7 @@ use xml_xtract::articles;
 use xml_xtract::jion::entry::Entry;
 use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
 use xml_xtract::jion::on_reading::has_on_reading;
+use xml_xtract::jion::on_reading::katakana_to_hiragana;
 use xml_xtract::jion::wiktionary::{
     is_kanji, kanji_word_entries, old_japanese_entries, parse_japanese_page, redirect_target,
     to_entry, wiktionary_entries, EntrySource, JapanesePage, WiktionaryEntry,
@@ -324,7 +325,7 @@ fn page_entries(
         if source == Source::All {
             words.extend(new_style_variant_entries(page, raw_page));
             if let Some(titles) = redirects.get(page.title.as_str()) {
-                let reading = redirect_reading(page);
+                let reading = redirect_reading(page).map(|reading| katakana_to_hiragana(&reading));
                 words.extend(redirect_word_entries(reading, page.title.as_str(), titles));
             }
         }

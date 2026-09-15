@@ -6,7 +6,8 @@ use regex::Regex;
 use super::entry::Entry;
 use super::mapping::MappingIndex;
 use super::on_reading::{
-    kanji_template_params, parse_common_readings, parse_dictionary_on_readings,
+    kanji_template_params, katakana_to_hiragana, parse_common_readings,
+    parse_dictionary_on_readings,
 };
 use super::rules::{canonicalize_modern, normalize_historical, render_segment};
 use super::segmentation::Segment;
@@ -300,10 +301,33 @@ fn okurigana_source(body: &str) -> Option<OkuriganaSource> {
 }
 
 fn clean_wikitext(value: &str) -> String {
-    value
+    resolve_wiki_links(value)
         .trim_matches(['[', ']', ' '])
         .replace("[[", "")
         .replace("]]", "")
+}
+
+fn resolve_wiki_links(value: &str) -> String {
+    let mut result = String::new();
+    let mut rest = value;
+    while let Some(start) = rest.find("[[") {
+        result.push_str(&rest[..start]);
+        let content_start = start + "[[".len();
+        let Some(relative_end) = rest[content_start..].find("]]") else {
+            result.push_str(&rest[content_start..]);
+            rest = &rest[rest.len()..];
+            break;
+        };
+        let end = content_start + relative_end;
+        let content = &rest[content_start..end];
+        let display = content
+            .rsplit_once('|')
+            .map_or(content, |(_, display)| display);
+        result.push_str(display);
+        rest = &rest[end + "]]".len()..];
+    }
+    result.push_str(rest);
+    result
 }
 
 fn hiragana_only(value: &str) -> bool {
@@ -1095,6 +1119,7 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     entries.extend(okuri_candidates(page, page.title.as_str(), true));
     for source in &page.wagokanji_sources {
         if let Some(entry) = wago_source_entry(source) {
+            entries.extend(okuri_onbin_entries(&entry));
             entries.push(entry);
         }
     }
@@ -1352,7 +1377,7 @@ fn starts_with_okuri(okuri_reading: &str, dictionary_reading: &str) -> bool {
 
 pub fn to_entry(entry: &WiktionaryEntry) -> Entry {
     Entry {
-        reading: entry.reading.clone(),
+        reading: katakana_to_hiragana(&entry.reading),
         candidates: vec![entry.candidate.clone()],
         annotations: Vec::new(),
     }
@@ -1596,12 +1621,20 @@ mod tests {
         );
         assert_eq!(
             collect_wiktionary_entries(&page),
-            vec![WiktionaryEntry {
-                reading: "かどわk".into(),
-                candidate: "拐".into(),
-                suru: false,
-                source: EntrySource::WagoOkuri,
-            }]
+            vec![
+                WiktionaryEntry {
+                    reading: "かどわi".into(),
+                    candidate: "拐".into(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                },
+                WiktionaryEntry {
+                    reading: "かどわk".into(),
+                    candidate: "拐".into(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                },
+            ]
         );
     }
 
@@ -1613,13 +1646,45 @@ mod tests {
         );
         assert_eq!(
             collect_wiktionary_entries(&page),
-            vec![WiktionaryEntry {
-                reading: "わすr".into(),
-                candidate: "忘".into(),
-                suru: false,
-                source: EntrySource::WagoOkuri,
-            }]
+            vec![
+                WiktionaryEntry {
+                    reading: "わすt".into(),
+                    candidate: "忘".into(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                },
+                WiktionaryEntry {
+                    reading: "わすr".into(),
+                    candidate: "忘".into(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                },
+            ]
         );
+    }
+
+    #[test]
+    fn resolves_piped_wiki_link_in_bold_wagokanji_candidate() {
+        let page = parse_japanese_page(
+            "老牛犢を舐る",
+            "{{kana-DEFAULTSORT|ろうぎゅうとくをねぶる}}\n'''[[老牛]][[犢]]を[[ねぶる|舐る]]'''（ろうぎゅうとくをねぶる）",
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec![
+                "ろうぎゅうとくをねぶt /老牛犢を舐/".to_string(),
+                "ろうぎゅうとくをねぶr /老牛犢を舐/".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn resolves_piped_wiki_link_in_bracket_candidate() {
+        let page = parse_japanese_page(
+            "いが",
+            "{{DEFAULTSORT:いか いが}}\n==={{homonym}}===\n'''いが'''\n*【[[伊賀]]】三重県にあった令制国。\n*【[[衣蛾]]】鱗翅目ヒロズコガ科の蛾。\n*【[[w:渭水|渭河]]】中国の陝西省の中央を流れ、黄河に合流する川。\n{{ja-idiom|いが}}",
+        );
+        assert!(page.noun_readings.contains(&"いが".to_string()));
     }
 
     #[test]
@@ -1652,7 +1717,7 @@ mod tests {
                 candidate: "若若".into(),
                 suru: false,
                 source: EntrySource::WagoOkuri,
-            }]
+            },]
         );
     }
 
@@ -1667,6 +1732,28 @@ mod tests {
         assert_eq!(
             entry_strings(&wiktionary_entries(&page)),
             vec!["あるi /歩/".to_string(), "あるk /歩/".to_string()]
+        );
+    }
+
+    #[test]
+    fn generates_onbin_entry_for_bold_wagokanji_source() {
+        let page = parse_japanese_page(
+            "適う",
+            "{{kana-DEFAULTSORT|かなう}}\n=={{L|ja}}==\n===和語の漢字表記===\n'''[[適]]う'''（かなう）",
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec!["かなt /適/".to_string(), "かなu /適/".to_string()]
+        );
+    }
+
+    #[test]
+    fn converts_katakana_entry_readings_to_hiragana() {
+        let page = parse_japanese_page("あかチン", "{{ja-noun|[[赤]]チン}}");
+        let entries = wiktionary_entries(&page);
+        assert_eq!(
+            entries.iter().map(to_entry).collect::<Vec<_>>(),
+            vec![Entry::new("あかちん", "赤チン")]
         );
     }
 
