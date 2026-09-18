@@ -44,11 +44,15 @@ impl Page {
         let marked_spaced = format!("== {{{{{language}}}}} ==");
         let linked = format!("=={{{{L|{language}}}}}==");
         let linked_spaced = format!("== {{{{L|{language}}}}} ==");
+        let native_marked = format!("=={language}語==");
+        let native_spaced = format!("== {language}語 ==");
         [
             linked,
             linked_spaced,
             marked,
             marked_spaced,
+            native_marked,
+            native_spaced,
             if language == "ojp" {
                 "==古典日本語==".to_string()
             } else {
@@ -117,6 +121,8 @@ impl Page {
             "== {{L|ja}} ==",
             "=={{ja}}==",
             "== {{ja}} ==",
+            "==日本語==",
+            "== 日本語 ==",
         ]
         .into_iter()
         .filter_map(|marker| self.revision.text.find(marker))

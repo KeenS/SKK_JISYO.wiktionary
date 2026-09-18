@@ -31,6 +31,32 @@
     </revision>
   </page>
   <page>
+    <title>よわい</title>
+    <ns>0</ns>
+    <id>12</id>
+    <revision>
+      <id>12</id>
+      <text>==日本語==
+===形容詞===
+{{ja-adj|[[弱]]い}}
+====活用====
+{{日本語活用|よわ|かろ|かっ&lt;br&gt;く|い|い|けれ|○|口語}}</text>
+    </revision>
+  </page>
+  <page>
+    <title>挨拶する</title>
+    <ns>0</ns>
+    <id>13</id>
+    <revision>
+      <id>13</id>
+      <text>=={{L|ja}}==
+===動詞===
+{{ja-verb}}【[[挨]]拶する】
+===={{conjug}}====
+{{日本語サ変活用|kana=あいさつ}}</text>
+    </revision>
+  </page>
+  <page>
     <title>移動</title>
     <ns>0</ns>
     <id>3</id>

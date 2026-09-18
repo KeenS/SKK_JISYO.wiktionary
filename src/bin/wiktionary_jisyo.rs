@@ -11,8 +11,9 @@ use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
 use xml_xtract::jion::on_reading::has_on_reading;
 use xml_xtract::jion::on_reading::katakana_to_hiragana;
 use xml_xtract::jion::wiktionary::{
-    is_kanji, kanji_word_entries, old_japanese_entries, parse_japanese_page, redirect_target,
-    to_entry, wiktionary_entries, EntrySource, JapanesePage, WiktionaryEntry,
+    is_kanji, kanji_word_entries, modern_conjugation_entries, old_japanese_entries,
+    parse_japanese_page, redirect_target, sahen_conjugation_entries, to_entry, wiktionary_entries,
+    EntrySource, JapanesePage, WiktionaryEntry,
 };
 
 #[cfg(test)]
@@ -437,6 +438,16 @@ fn run(options: Options) -> io::Result<()> {
         report.noun_readings += parsed.noun_readings.len();
         let (entries, converted, page_jion_entries) =
             page_entries(&parsed, &mappings, options.source, &page, &redirects);
+        let modern_conjugations = modern_conjugation_entries(&parsed);
+        let sahen_conjugations = sahen_conjugation_entries(&parsed);
+        report.add_entries(&modern_conjugations);
+        report.add_entries(&sahen_conjugations);
+        for entry in modern_conjugations.iter().map(to_entry) {
+            output_entries.insert(entry_key(&entry), entry);
+        }
+        for entry in sahen_conjugations.iter().map(to_entry) {
+            output_entries.insert(entry_key(&entry), entry);
+        }
         for entry in page_jion_entries {
             jion_entries.insert(entry_key(&entry), entry);
         }

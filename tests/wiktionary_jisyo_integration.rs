@@ -104,6 +104,8 @@ fn converts_wiktionary_fixture_end_to_end() {
     assert!(output_text.contains("べつべつ /別々/"));
     assert!(output_text.contains("あせr /焦/"));
     assert!(output_text.contains("あせt /焦/"));
+    assert!(output_text.contains("よわk /弱/"));
+    assert!(output_text.contains("あいさつs /挨拶する/"));
 
     let ojp_output_text = fs::read_to_string(&ojp_output).unwrap();
     assert!(ojp_output_text.contains(";; okuri-ari entries."));
@@ -119,7 +121,7 @@ fn converts_wiktionary_fixture_end_to_end() {
 
     let report_text = fs::read_to_string(&report).unwrap();
     assert!(report_text.contains("metric\tcount"));
-    assert!(report_text.contains("pages\t9"));
+    assert!(report_text.contains("pages\t11"));
     assert!(report_text.contains("ojp_entries\t1"));
     assert!(report_text.contains("jion_entries\t1"));
     assert!(report_text.contains("shared_entries\t0"));
@@ -154,7 +156,7 @@ fn dry_run_does_not_write_wiktionary_dictionary() {
     assert!(!output.exists());
 
     let report_text = fs::read_to_string(&report).unwrap();
-    assert!(report_text.contains("entries\t11"));
+    assert!(report_text.contains("entries\t15"));
 
     fs::remove_file(report).unwrap();
 }
