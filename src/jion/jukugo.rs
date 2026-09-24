@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use super::entry::Entry;
 use super::exception::Exception;
 use super::mapping::{to_index, Mapping};
-use super::rules::{canonicalize_modern, convert, restore_modern, RuleError};
+use super::rules::{convert, restore_modern, sokuon_expansions, RuleError};
 use super::segmentation::{segmentations, Segment};
 
 #[derive(Debug, Clone)]
@@ -63,57 +63,32 @@ pub fn convert_entries(
                 continue;
             }
 
-            let canonical_reading = canonicalize_modern(&entry.reading);
-            let alternatives = segmentations(candidate, &canonical_reading, &index);
-            match alternatives.as_slice() {
-                [] => output.report.push(ReportRow {
+            match segment_reading(candidate, &entry.reading, &index) {
+                SegmentOutcome::Missing(detail) => output.report.push(ReportRow {
                     status: "missing",
                     candidate: candidate.clone(),
                     reading: entry.reading.clone(),
-                    detail: "no unique segmentation".to_string(),
+                    detail: detail.to_string(),
                 }),
-                [segments] => match convert(candidate, &entry.reading, segments) {
-                    Ok(conversion) => {
-                        if restore_modern(&conversion).is_some() {
-                            output
-                                .entries
-                                .entry(conversion.historical.clone())
-                                .or_default()
-                                .push(candidate.clone());
-                            output.report.push(ReportRow {
-                                status: "converted",
-                                candidate: candidate.clone(),
-                                reading: entry.reading.clone(),
-                                detail: conversion.historical.clone(),
-                            });
-                        } else {
-                            output.report.push(ReportRow {
-                                status: "missing",
-                                candidate: candidate.clone(),
-                                reading: entry.reading.clone(),
-                                detail: "restore check failed".to_string(),
-                            });
-                        }
-                    }
-                    Err(RuleError::EmptyInput) => output.report.push(ReportRow {
-                        status: "missing",
-                        candidate: candidate.clone(),
-                        reading: entry.reading.clone(),
-                        detail: "empty input".to_string(),
-                    }),
-                    Err(RuleError::UnrestorableSokuon) => output.report.push(ReportRow {
-                        status: "missing",
-                        candidate: candidate.clone(),
-                        reading: entry.reading.clone(),
-                        detail: "unrestorable sokuon".to_string(),
-                    }),
-                },
-                alternatives => output.report.push(ReportRow {
+                SegmentOutcome::Ambiguous(alternatives) => output.report.push(ReportRow {
                     status: "ambiguous",
                     candidate: candidate.clone(),
                     reading: entry.reading.clone(),
-                    detail: ambiguity_detail(alternatives),
+                    detail: ambiguity_detail(&alternatives),
                 }),
+                SegmentOutcome::Converted(conversion) => {
+                    output
+                        .entries
+                        .entry(conversion.historical.clone())
+                        .or_default()
+                        .push(candidate.clone());
+                    output.report.push(ReportRow {
+                        status: "converted",
+                        candidate: candidate.clone(),
+                        reading: entry.reading.clone(),
+                        detail: conversion.historical.clone(),
+                    });
+                }
             }
         }
     }
@@ -124,20 +99,63 @@ pub fn convert_entries(
     output
 }
 
-fn is_kanji(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{3400}'..='\u{4DBF}'
-            | '\u{4E00}'..='\u{9FFF}'
-            | '\u{F900}'..='\u{FAFF}'
-            | '\u{20000}'..='\u{2A6DF}'
-            | '\u{2A700}'..='\u{2EBEF}'
-            | '\u{30000}'..='\u{3134F}'
-    )
+pub fn is_jukugo_candidate(candidate: &str) -> bool {
+    candidate.chars().count() > 1 && candidate.chars().all(crate::model::is_kanji)
 }
 
-pub fn is_jukugo_candidate(candidate: &str) -> bool {
-    candidate.chars().count() > 1 && candidate.chars().all(is_kanji)
+enum SegmentOutcome {
+    Missing(&'static str),
+    Ambiguous(Vec<Vec<Segment>>),
+    Converted(super::rules::Conversion),
+}
+
+fn same_modern_sequence(left: &[Segment], right: &[Segment]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right.iter())
+            .all(|(left, right)| left.kanji == right.kanji && left.modern == right.modern)
+}
+
+/// Segment every 促音 expansion. Keep one result when the successful
+/// expansions agree on the kanji and modern reading. Disagreeing splits stay
+/// ambiguous.
+fn segment_reading(
+    candidate: &str,
+    reading: &str,
+    index: &HashMap<String, Vec<Mapping>>,
+) -> SegmentOutcome {
+    if reading.is_empty() {
+        return SegmentOutcome::Missing("empty input");
+    }
+    let mut successes: Vec<Vec<Segment>> = Vec::new();
+    let mut restore_failed = false;
+    for expansion in sokuon_expansions(reading) {
+        for segments in segmentations(candidate, &expansion, index) {
+            match convert(candidate, reading, &segments) {
+                Ok(conversion) if restore_modern(&conversion).is_some() => {
+                    if !successes
+                        .iter()
+                        .any(|existing| same_modern_sequence(existing, &segments))
+                    {
+                        successes.push(segments);
+                    }
+                }
+                Ok(_) | Err(RuleError::UnrestorableSokuon) => restore_failed = true,
+                Err(RuleError::EmptyInput) => {}
+            }
+        }
+    }
+    match successes.len() {
+        0 if restore_failed => SegmentOutcome::Missing("restore check failed"),
+        0 => SegmentOutcome::Missing("no unique segmentation"),
+        1 => match convert(candidate, reading, &successes[0]) {
+            Ok(conversion) => SegmentOutcome::Converted(conversion),
+            Err(RuleError::EmptyInput) => SegmentOutcome::Missing("empty input"),
+            Err(RuleError::UnrestorableSokuon) => SegmentOutcome::Missing("unrestorable sokuon"),
+        },
+        _ => SegmentOutcome::Ambiguous(successes),
+    }
 }
 
 fn exception_index(exceptions: &[Exception]) -> HashMap<&str, HashMap<&str, &Exception>> {
@@ -163,4 +181,77 @@ fn ambiguity_detail(alternatives: &[Vec<Segment>]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" | ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mapping(kanji: &str, modern: &str, historical: &str) -> Mapping {
+        Mapping {
+            kanji: kanji.into(),
+            modern: modern.into(),
+            historical: historical.into(),
+        }
+    }
+
+    fn converted(candidate: &str, reading: &str, mappings: &[Mapping]) -> ConvertedEntries {
+        let entry = Entry::new(reading, candidate);
+        convert_entries(&[entry], mappings, &[])
+    }
+
+    #[test]
+    fn segments_sokuon_from_ku_tsu_and_chi() {
+        let school = converted(
+            "学校",
+            "がっこう",
+            &[mapping("学", "がく", "がく"), mapping("校", "こう", "かう")],
+        );
+        assert_eq!(school.entries["がっかう"], vec!["学校".to_string()]);
+
+        let diary = converted(
+            "日記",
+            "にっき",
+            &[mapping("日", "にち", "にち"), mapping("記", "き", "き")],
+        );
+        assert_eq!(diary.entries["にっき"], vec!["日記".to_string()]);
+
+        let marriage = converted(
+            "結婚",
+            "けっこん",
+            &[mapping("結", "けつ", "けつ"), mapping("婚", "こん", "こん")],
+        );
+        assert_eq!(marriage.entries["けっこん"], vec!["結婚".to_string()]);
+
+        let experiment = converted(
+            "実験",
+            "じっけん",
+            &[mapping("実", "じつ", "じつ"), mapping("験", "けん", "けん")],
+        );
+        assert_eq!(experiment.entries["じっけん"], vec!["実験".to_string()]);
+    }
+
+    #[test]
+    fn leaves_disagreeing_sokuon_expansions_ambiguous() {
+        let result = converted(
+            "日記",
+            "にっき",
+            &[
+                mapping("日", "にち", "にち"),
+                mapping("日", "にく", "にく"),
+                mapping("記", "き", "き"),
+            ],
+        );
+        assert!(result.entries.is_empty());
+        assert_eq!(result.report[0].status, "ambiguous");
+    }
+
+    #[test]
+    fn treats_extension_kanji_as_jukugo() {
+        assert!(crate::model::is_kanji('\u{F900}'));
+        assert!(crate::model::is_kanji('\u{20000}'));
+        assert!(is_jukugo_candidate("\u{F900}\u{20000}"));
+        assert!(!crate::jion::wiktionary::is_symbol("\u{F900}"));
+        assert!(!crate::jion::wiktionary::is_symbol("\u{20000}"));
+    }
 }

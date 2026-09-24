@@ -15,40 +15,65 @@ pub enum RuleError {
     UnrestorableSokuon,
 }
 
-/// Make a modern reading comparable with the kanji readings in the mapping.
-///
-/// The mapping stores the historical stem of each reading, while actual
-/// dictionary readings often contain a small tsu. For example, 学校 is written
-/// as "がっこう" but its readings are "がく" and "こう".
-pub fn canonicalize_modern(reading: &str) -> String {
-    let mut result = String::with_capacity(reading.len());
-    let mut chars = reading.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch != 'っ' {
-            result.push(ch);
-            continue;
+fn sokuon_sources(next: char) -> &'static [char] {
+    match next {
+        'か' | 'き' | 'く' | 'け' | 'こ' | 'が' | 'ぎ' | 'ぐ' | 'げ' | 'ご' => {
+            &['く', 'つ', 'ち']
         }
-
-        let Some(next) = chars.peek().copied() else {
-            result.push(ch);
-            continue;
-        };
-        let expanded = match next {
-            'こ' | 'ご' => 'く',
-            'か' | 'が' | 'く' | 'ぐ' | 'き' | 'ぎ' => 'く',
-            'さ' | 'ざ' | 'し' | 'じ' | 'す' | 'ず' | 'せ' | 'ぜ' | 'そ' | 'ぞ' | 'た' | 'だ'
-            | 'ち' | 'ぢ' | 'つ' | 'づ' | 'て' | 'で' | 'と' | 'ど' | 'な' | 'に' | 'ぬ' | 'ね'
-            | 'の' | 'は' | 'ひ' | 'ふ' | 'へ' | 'ほ' | 'ば' | 'び' | 'ぶ' | 'べ' | 'ぼ' | 'ぱ'
-            | 'ぴ' | 'ぷ' | 'ぺ' | 'ぽ' | 'ま' | 'み' | 'む' | 'め' | 'も' | 'や' | 'ゆ' | 'よ'
-            | 'ら' | 'り' | 'る' | 'れ' | 'ろ' => 'つ',
-            _ => {
-                result.push(ch);
-                continue;
-            }
-        };
-        result.push(expanded);
+        'さ' | 'ざ' | 'し' | 'じ' | 'す' | 'ず' | 'せ' | 'ぜ' | 'そ' | 'ぞ' | 'た' | 'だ'
+        | 'ち' | 'ぢ' | 'つ' | 'づ' | 'て' | 'で' | 'と' | 'ど' | 'な' | 'に' | 'ぬ' | 'ね'
+        | 'の' | 'は' | 'ひ' | 'ふ' | 'へ' | 'ほ' | 'ば' | 'び' | 'ぶ' | 'べ' | 'ぼ' | 'ぱ'
+        | 'ぴ' | 'ぷ' | 'ぺ' | 'ぽ' | 'ま' | 'み' | 'む' | 'め' | 'も' | 'や' | 'ゆ' | 'よ'
+        | 'ら' | 'り' | 'る' | 'れ' | 'ろ' => &['つ', 'ち'],
+        _ => &[],
     }
-    result
+}
+
+/// Readings produced by expanding each 促音 to a mora that can geminate.
+///
+/// 学校 is written "がっこう" while the mapping stores "がく" and "こう".
+/// 日記 is "にっき" from "にち" and "き", and 結婚 is "けっこん" from "けつ".
+/// Each っ therefore expands to every legal source mora. A final っ stays っ.
+pub fn sokuon_expansions(reading: &str) -> Vec<String> {
+    fn expand(chars: &[char], index: usize, current: &mut String, out: &mut Vec<String>) {
+        if index == chars.len() {
+            out.push(current.clone());
+            return;
+        }
+        let ch = chars[index];
+        if ch == 'っ' {
+            if let Some(&next) = chars.get(index + 1) {
+                let sources = sokuon_sources(next);
+                if !sources.is_empty() {
+                    for source in sources {
+                        current.push(*source);
+                        expand(chars, index + 1, current, out);
+                        current.pop();
+                    }
+                    return;
+                }
+            }
+        }
+        current.push(ch);
+        expand(chars, index + 1, current, out);
+        current.pop();
+    }
+
+    let chars: Vec<char> = reading.chars().collect();
+    let mut out = Vec::new();
+    expand(&chars, 0, &mut String::new(), &mut out);
+    out
+}
+
+/// True when the readings are equal or share an expanded 促音 spelling.
+pub fn sokuon_equivalent(left: &str, right: &str) -> bool {
+    if left == right {
+        return true;
+    }
+    let right = sokuon_expansions(right);
+    sokuon_expansions(left)
+        .iter()
+        .any(|item| right.iter().any(|other| item == other))
 }
 
 /// Expand small yōon kana to their historical full-kana spelling.
@@ -219,9 +244,24 @@ mod tests {
     }
 
     fn unique_segments(candidate: &str, reading: &str, mappings: &[Mapping]) -> Vec<Segment> {
-        match segment(candidate, &canonicalize_modern(reading), mappings) {
-            Segmentation::Unique(segments) => segments,
-            result => panic!("expected unique segmentation, got {result:?}"),
+        let mut found = Vec::new();
+        for expansion in sokuon_expansions(reading) {
+            if let Segmentation::Unique(segments) = segment(candidate, &expansion, mappings) {
+                let key: Vec<_> = segments
+                    .iter()
+                    .map(|segment| (segment.kanji.clone(), segment.modern.clone()))
+                    .collect();
+                if !found
+                    .iter()
+                    .any(|(existing, _): &(Vec<_>, Vec<Segment>)| existing == &key)
+                {
+                    found.push((key, segments));
+                }
+            }
+        }
+        match found.len() {
+            1 => found.remove(0).1,
+            _ => panic!("expected unique segmentation, got {found:?}"),
         }
     }
 
@@ -259,9 +299,16 @@ mod tests {
     }
 
     #[test]
-    fn canonicalizes_sokuon() {
-        assert_eq!(canonicalize_modern("がっこう"), "がくこう");
-        assert_eq!(canonicalize_modern("いっさい"), "いつさい");
-        assert_eq!(canonicalize_modern("あっ"), "あっ");
+    fn expands_sokuon_to_every_legal_mora() {
+        let gakkou = sokuon_expansions("がっこう");
+        assert!(gakkou.contains(&"がくこう".to_string()));
+        let nikki = sokuon_expansions("にっき");
+        assert!(nikki.contains(&"にちき".to_string()));
+        let jikken = sokuon_expansions("じっけん");
+        assert!(jikken.contains(&"じつけん".to_string()));
+        let issai = sokuon_expansions("いっさい");
+        assert!(issai.contains(&"いつさい".to_string()));
+        assert!(issai.contains(&"いちさい".to_string()));
+        assert_eq!(sokuon_expansions("あっ"), vec!["あっ".to_string()]);
     }
 }

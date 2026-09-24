@@ -69,7 +69,7 @@ fn run(options: &Options) -> io::Result<()> {
             .xml
             .to_str()
             .ok_or_else(|| io::Error::other("XML path is not valid UTF-8"))?,
-    );
+    )?;
     sort_dictionary(options, &frequencies)
 }
 

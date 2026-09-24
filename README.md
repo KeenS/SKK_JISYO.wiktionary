@@ -147,7 +147,7 @@ $ ./make.sh --gsi
 既にデータをダウンロードしてあるならそれを使うこともできる。
 
 ``` console
-$ ./make.sh path/to/jawiktionary-latest-categorylinks.sql path/to/jawiktionary-latest-pages-articles.xml
+$ ./make.sh path/to/jawiktionary-latest-categorylinks.sql path/to/jawiktionary-latest-linktarget.sql path/to/jawiktionary-latest-pages-articles.xml
 ```
 
 
@@ -171,6 +171,7 @@ $ ./make.sh --gsi data/gazetteer-of-japan.txt
 [Wikimediaプロジェクトのダンプ](https://dumps.wikimedia.org/backup-index.html)のjawikitonaryの最新版にいく。そこから必要なデータをダウンロードする。必要なデータは以下の2つ。
 
 * `jawiktionary-*-categorylinks.sql`
+* `jawiktionary-*-linktarget.sql`
 * `jawiktionary-*-pages-articles.xml`
 
 ダウンロードしたらgzやbz2を解凍しておく。
@@ -182,6 +183,7 @@ $ ./make.sh --gsi data/gazetteer-of-japan.txt
 ```console
 $ docker run --name wiktionary --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
 $ docker exec  -i wiktionary mysql wiktionary < jawiktionary-*-categorylinks.sql
+$ docker exec  -i wiktionary mysql wiktionary < jawiktionary-*-linktarget.sql
 ```
 
 まあまあの時間がかかる。
@@ -193,7 +195,7 @@ sqlite3でできたら手軽でよかったが、スキーマの `unsigned` に�
 ここから「カテゴリー:漢字」に属する記事のIDを取得する。 `ids.txt` に出力する。
 
 ```console
-$ docker exec -it wiktionary mysql wiktionary --skip-column-names -Be 'SELECT cl_from FROM categorylinks WHERE cl_target_id = 90955 ORDER BY cl_from' > ids.txt
+$ docker exec -i wiktionary mysql wiktionary --skip-column-names -B -e 'SELECT cl_from FROM categorylinks WHERE cl_target_id = (SELECT lt_id FROM linktarget WHERE lt_namespace = 14 AND lt_title = 0xE6BCA2E5AD97) ORDER BY cl_from' > ids.txt
 ```
 
 MySQLはもう不要なので落としておく

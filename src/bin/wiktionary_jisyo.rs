@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use wana_kana::ConvertJapanese;
 use xml_xtract::articles;
@@ -11,9 +11,9 @@ use xml_xtract::jion::mapping::{read_mapping, MappingIndex};
 use xml_xtract::jion::on_reading::has_on_reading;
 use xml_xtract::jion::on_reading::katakana_to_hiragana;
 use xml_xtract::jion::wiktionary::{
-    is_kanji, kanji_word_entries, modern_conjugation_entries, old_japanese_entries,
-    parse_japanese_page, redirect_target, sahen_conjugation_entries, to_entry, wiktionary_entries,
-    EntrySource, JapanesePage, WiktionaryEntry,
+    is_kanji, kanji_word_entries, old_japanese_entries, parse_japanese_page, redirect_target,
+    sahen_conjugation_entries, to_entry, wiktionary_entries, EntrySource, JapanesePage,
+    WiktionaryEntry,
 };
 
 #[cfg(test)]
@@ -124,6 +124,69 @@ mod tests {
         assert_eq!(converted, vec![Entry::new("がっこう", "学校")]);
         assert_eq!(jion, vec![Entry::new("がくかう", "学校")]);
     }
+
+    #[test]
+    fn merges_candidates_that_share_a_reading() {
+        let mut output = BTreeMap::new();
+        insert_entry(&mut output, Entry::new("がっこう", "学校"));
+        insert_entry(&mut output, Entry::new("がっこう", "合校"));
+        insert_entry(&mut output, Entry::new("あるk", "歩"));
+        let dictionary = Dictionary::from_entries(output.values());
+        assert_eq!(dictionary.okuri_nasi[0].to_line(), "がっこう /学校/合校/\n");
+        assert_eq!(dictionary.okuri_ari, vec![Entry::new("あるk", "歩")]);
+    }
+
+    #[test]
+    fn counts_modern_conjugation_once() {
+        use xml_xtract::model::{Page, Revision};
+
+        let parsed = parse_japanese_page(
+            "よわい",
+            "=={{ja}}==\n===形容詞===\n{{ja-adj}}【[[弱]]い】\n====活用====\n{{日本語活用|よわ|かろ|かっ&lt;br&gt;く|い|い|けれ|○|口語}}",
+        );
+        let raw = Page {
+            ns: 0,
+            id: 1,
+            title: "よわい".into(),
+            revision: Revision {
+                id: 1,
+                comment: None,
+                text: String::new(),
+            },
+        };
+        let (words, converted, _) = page_entries(
+            &parsed,
+            &MappingIndex::new(&[]),
+            Source::All,
+            &raw,
+            &HashMap::new(),
+        );
+        let mut report = Report::default();
+        report.add_entries(&words);
+        let wago = words
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry.source,
+                    EntrySource::WagoOkuri | EntrySource::Suru | EntrySource::SuruNoun
+                )
+            })
+            .count();
+        assert_eq!(report.wago_entries, wago);
+        assert_eq!(wago, converted.len());
+        assert!(converted.iter().any(|entry| entry.reading == "よわk"));
+
+        let (kanji_words, _, _) = page_entries(
+            &parsed,
+            &MappingIndex::new(&[]),
+            Source::Kanji,
+            &raw,
+            &HashMap::new(),
+        );
+        assert!(kanji_words
+            .iter()
+            .all(|entry| entry.source != EntrySource::WagoOkuri));
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,7 +283,7 @@ impl Dictionary {
         dictionary
     }
 
-    fn write_to(&self, path: &PathBuf) -> io::Result<()> {
+    fn write_to(&self, path: impl AsRef<Path>) -> io::Result<()> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
         writeln!(writer, ";; okuri-ari entries.")?;
@@ -294,10 +357,48 @@ fn parse_args() -> Result<Options, ExitCode> {
     })
 }
 
-type EntryKey = (String, Vec<String>);
+fn insert_entry(map: &mut BTreeMap<String, Entry>, entry: Entry) {
+    match map.get_mut(&entry.reading) {
+        Some(existing) => {
+            for (index, candidate) in entry.candidates.iter().enumerate() {
+                if existing
+                    .candidates
+                    .iter()
+                    .any(|current| current == candidate)
+                {
+                    continue;
+                }
+                existing.candidates.push(candidate.clone());
+                if let Some(annotation) = entry.annotations.get(index) {
+                    if existing.annotations.len() + 1 == existing.candidates.len() {
+                        existing.annotations.push(annotation.clone());
+                    }
+                }
+            }
+        }
+        None => {
+            map.insert(entry.reading.clone(), entry);
+        }
+    }
+}
 
-fn entry_key(entry: &Entry) -> EntryKey {
-    (entry.reading.clone(), entry.candidates.clone())
+fn partial_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".partial");
+    path.with_file_name(name)
+}
+
+fn publish(path: &Path, write: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
+    let partial = partial_path(path);
+    if let Err(error) = write(&partial) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(error);
+    }
+    if let Err(error) = std::fs::rename(&partial, path) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn page_entries(
@@ -323,6 +424,7 @@ fn page_entries(
     }
     if source != Source::Kanji {
         words.extend(wiktionary_entries(page));
+        words.extend(sahen_conjugation_entries(page));
         if source == Source::All {
             words.extend(new_style_variant_entries(page, raw_page));
             if let Some(titles) = redirects.get(page.title.as_str()) {
@@ -402,19 +504,21 @@ fn main() -> ExitCode {
 
 fn run(options: Options) -> io::Result<()> {
     let mappings = MappingIndex::new(&read_mapping(&options.mapping)?);
-    let redirects = redirect_index(&options.xml);
-    let mut output_entries = BTreeMap::<EntryKey, Entry>::new();
-    let mut jion_entries = BTreeMap::<EntryKey, Entry>::new();
-    let mut ojp_entries = BTreeMap::<EntryKey, Entry>::new();
+    let redirects = redirect_index(&options.xml)?;
+    let mut output_entries = BTreeMap::<String, Entry>::new();
+    let mut jion_entries = BTreeMap::<String, Entry>::new();
+    let mut ojp_entries = BTreeMap::<String, Entry>::new();
     let mut report = Report::default();
 
-    for page in articles(&options.xml) {
+    let mut pages = articles(&options.xml)?;
+    for page in pages.by_ref() {
+        let page = page?;
         if let Some(text) = page.symbol_text() {
             let parsed = parse_japanese_page(page.title.as_str(), text);
             let entries = wiktionary_entries(&parsed);
             report.add_entries(&entries);
             for entry in entries.iter().map(to_entry) {
-                output_entries.insert(entry_key(&entry), entry);
+                insert_entry(&mut output_entries, entry);
             }
             continue;
         }
@@ -424,7 +528,7 @@ fn run(options: Options) -> io::Result<()> {
             let entries = old_japanese_entries(&parsed);
             report.add_entries(&entries);
             for entry in entries.iter().map(to_entry) {
-                ojp_entries.insert(entry_key(&entry), entry);
+                insert_entry(&mut ojp_entries, entry);
             }
         }
 
@@ -438,29 +542,22 @@ fn run(options: Options) -> io::Result<()> {
         report.noun_readings += parsed.noun_readings.len();
         let (entries, converted, page_jion_entries) =
             page_entries(&parsed, &mappings, options.source, &page, &redirects);
-        let modern_conjugations = modern_conjugation_entries(&parsed);
-        let sahen_conjugations = sahen_conjugation_entries(&parsed);
-        report.add_entries(&modern_conjugations);
-        report.add_entries(&sahen_conjugations);
-        for entry in modern_conjugations.iter().map(to_entry) {
-            output_entries.insert(entry_key(&entry), entry);
-        }
-        for entry in sahen_conjugations.iter().map(to_entry) {
-            output_entries.insert(entry_key(&entry), entry);
-        }
         for entry in page_jion_entries {
-            jion_entries.insert(entry_key(&entry), entry);
+            insert_entry(&mut jion_entries, entry);
         }
         report.add_entries(&entries);
         for entry in converted {
-            output_entries.insert(entry_key(&entry), entry);
+            insert_entry(&mut output_entries, entry);
         }
+    }
+    if pages.skipped_pages() > 0 {
+        eprintln!("wiktionary_jisyo: skipped {} pages", pages.skipped_pages());
     }
 
     report.entries = output_entries.len();
     let dictionary = Dictionary::from_entries(output_entries.values());
     if !options.dry_run {
-        dictionary.write_to(&options.output)?;
+        publish(&options.output, |path| dictionary.write_to(path))?;
     }
 
     report.jion_entries = jion_entries.len();
@@ -471,26 +568,30 @@ fn run(options: Options) -> io::Result<()> {
     jion_entries.retain(|key, _| !output_entries.contains_key(key));
     let jion_dictionary = Dictionary::from_entries(jion_entries.values());
     if let Some(path) = options.jion_output {
-        jion_dictionary.write_to(&path)?;
+        publish(&path, |path| jion_dictionary.write_to(path))?;
     }
 
     let ojp_dictionary = Dictionary::from_entries(ojp_entries.values());
     if let Some(path) = options.ojp_output {
         if !options.dry_run {
-            ojp_dictionary.write_to(&path)?;
+            publish(&path, |path| ojp_dictionary.write_to(path))?;
         }
     }
 
     if let Some(report_path) = options.report {
-        write_report(report_path, &report)?;
+        publish(&report_path, |path| {
+            write_report(path.to_path_buf(), &report)
+        })?;
     }
 
     Ok(())
 }
 
-fn redirect_index(xml: &PathBuf) -> HashMap<String, Vec<String>> {
+fn redirect_index(xml: &Path) -> io::Result<HashMap<String, Vec<String>>> {
     let mut redirects: HashMap<String, Vec<String>> = HashMap::new();
-    for page in articles(xml) {
+    let mut pages = articles(xml)?;
+    for page in pages.by_ref() {
+        let page = page?;
         if page.ns != 0 {
             continue;
         }
@@ -501,7 +602,13 @@ fn redirect_index(xml: &PathBuf) -> HashMap<String, Vec<String>> {
                 .push(page.title.clone());
         }
     }
-    redirects
+    if pages.skipped_pages() > 0 {
+        eprintln!(
+            "wiktionary_jisyo: skipped {} pages while indexing redirects",
+            pages.skipped_pages()
+        );
+    }
+    Ok(redirects)
 }
 
 fn redirect_reading(page: &JapanesePage) -> Option<String> {

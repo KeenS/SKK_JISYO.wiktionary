@@ -1,14 +1,19 @@
 use crate::model::Page;
 use std::collections::HashMap;
+use std::io;
 
 pub type LinkFrequency = HashMap<String, usize>;
 
-pub fn japanese_link_frequencies(xml: &str) -> LinkFrequency {
+pub fn japanese_link_frequencies(xml: &str) -> io::Result<LinkFrequency> {
     let mut frequencies = LinkFrequency::new();
-    for page in crate::articles(xml) {
-        add_page_links(&mut frequencies, &page);
+    let mut pages = crate::articles(xml)?;
+    for page in pages.by_ref() {
+        add_page_links(&mut frequencies, &page?);
     }
-    frequencies
+    if pages.skipped_pages() > 0 {
+        eprintln!("sort_candidates: skipped {} pages", pages.skipped_pages());
+    }
+    Ok(frequencies)
 }
 
 pub fn add_page_links(frequencies: &mut LinkFrequency, page: &Page) {

@@ -20,7 +20,10 @@ fn parser_decodes_xml_entities() {
     )
     .unwrap();
 
-    let pages: Vec<_> = xml_xtract::articles(&xml_path).collect();
+    let pages: Vec<_> = xml_xtract::articles(&xml_path)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
     fs::remove_file(xml_path).unwrap();
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].revision.text, "漢音=コウ<カウ");
@@ -55,7 +58,10 @@ fn parser_continues_after_empty_text_element() {
     )
     .unwrap();
 
-    let pages: Vec<_> = xml_xtract::articles(&xml_path).collect();
+    let pages: Vec<_> = xml_xtract::articles(&xml_path)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
     fs::remove_file(xml_path).unwrap();
 
     assert_eq!(pages.len(), 2);
@@ -98,10 +104,9 @@ fn converts_wiktionary_fixture_end_to_end() {
     assert!(output_text.contains("あるi /歩/"));
     assert!(output_text.contains("あるk /歩/"));
     assert!(!output_text.contains("かんする /緘する/"));
-    assert!(output_text.contains("えん /円/"));
+    assert!(output_text.contains("えん /圓/円/"));
     assert!(output_text.contains("たくさん /沢山/"));
-    assert!(output_text.contains("べつべつ /別別/"));
-    assert!(output_text.contains("べつべつ /別々/"));
+    assert!(output_text.contains("べつべつ /別別/別々/"));
     assert!(output_text.contains("あせr /焦/"));
     assert!(output_text.contains("あせt /焦/"));
     assert!(output_text.contains("よわk /弱/"));
@@ -156,7 +161,7 @@ fn dry_run_does_not_write_wiktionary_dictionary() {
     assert!(!output.exists());
 
     let report_text = fs::read_to_string(&report).unwrap();
-    assert!(report_text.contains("entries\t15"));
+    assert!(report_text.contains("entries\t13"));
 
     fs::remove_file(report).unwrap();
 }

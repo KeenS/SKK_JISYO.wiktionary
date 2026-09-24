@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process;
 use xml_xtract::jion::mapping::Mapping;
 use xml_xtract::jion::on_reading::{
     build_historical_inference, kanji_template_params, parse_on_readings, resolve_readings,
     OnReading,
 };
-use xml_xtract::{kanji_articles, model::Page};
+use xml_xtract::kanji_articles;
 
 struct Outputs {
     dictionary: BufWriter<File>,
@@ -23,16 +24,16 @@ impl Outputs {
         })
     }
 
-    fn write_kanji_page(
+    fn write_kanji(
         &mut self,
-        page: &Page,
+        title: &str,
         readings: &[OnReading],
         inference: &HashMap<String, String>,
     ) -> io::Result<()> {
         let mappings = resolve_readings(readings, inference);
         for mapping in &mappings {
             for historical in mapping.historical_entries() {
-                writeln!(self.dictionary, "{historical} /{}/", page.title)?;
+                writeln!(self.dictionary, "{historical} /{title}/")?;
             }
         }
         for mapping in &mappings {
@@ -42,65 +43,102 @@ impl Outputs {
             }
             writeln!(
                 self.dictionary,
-                "{} /{};{}/",
+                "{} /{title};{}/",
                 mapping.modern,
-                page.title,
                 annotations.join(";")
             )?;
         }
         for mapping in &mappings {
             for historical in &mapping.historicals {
-                writeln!(
-                    self.mappings,
-                    "{}\t{}\t{}",
-                    page.title, mapping.modern, historical
-                )?;
+                writeln!(self.mappings, "{title}\t{}\t{}", mapping.modern, historical)?;
             }
         }
         Ok(())
     }
 }
 
-fn parse_kanji_page(
-    page: &Page,
-    inference: &HashMap<String, String>,
-    outputs: &mut Outputs,
-) -> io::Result<()> {
-    let Some(params) = kanji_template_params(&page.revision.text) else {
-        return Ok(());
-    };
-    let readings = parse_on_readings(params);
-    outputs.write_kanji_page(page, &readings, inference)
+fn partial_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".partial");
+    path.with_file_name(name)
 }
 
-fn main() -> io::Result<()> {
-    let ids_file = env::args().nth(1).expect("Usage: IDs XML");
-    let xml_file = env::args().nth(2).expect("Usage: IDs XML");
-    let mut outputs = Outputs::create("tmp.jion", "kanji_readings.tsv")?;
+fn usage() -> io::Error {
+    eprintln!("Usage: jion IDS XML [DICTIONARY [MAPPING]]");
+    io::Error::new(io::ErrorKind::InvalidInput, "missing arguments")
+}
 
-    let explicit_mappings = kanji_articles(&ids_file, &xml_file)
-        .filter_map(|page| {
-            let params = kanji_template_params(&page.revision.text)?;
-            Some(parse_on_readings(params))
-        })
-        .flatten()
-        .filter_map(|reading| {
-            reading
-                .historical
-                .filter(|historical| *historical != reading.modern)
-                .map(|historical| Mapping {
-                    kanji: String::new(),
-                    modern: reading.modern,
-                    historical,
-                })
-        })
-        .collect::<Vec<_>>();
-    let inference = build_historical_inference(&explicit_mappings);
+fn generate(ids_file: &str, xml_file: &str, dictionary: &Path, mapping: &Path) -> io::Result<()> {
+    let dictionary_partial = partial_path(dictionary);
+    let mapping_partial = partial_path(mapping);
+    let result = (|| {
+        let mut pages = kanji_articles(ids_file, xml_file)?;
+        let mut collected = Vec::new();
+        for page in pages.by_ref() {
+            let page = page?;
+            if let Some(params) = kanji_template_params(&page.revision.text) {
+                collected.push((page.title, params.to_string()));
+            }
+        }
+        if pages.skipped_pages() > 0 {
+            eprintln!("jion: skipped {} pages", pages.skipped_pages());
+        }
 
-    for page in kanji_articles(&ids_file, &xml_file) {
-        parse_kanji_page(&page, &inference, &mut outputs)?;
+        let explicit_mappings = collected
+            .iter()
+            .flat_map(|(_, params)| parse_on_readings(params))
+            .filter_map(|reading| {
+                reading
+                    .historical
+                    .filter(|historical| *historical != reading.modern)
+                    .map(|historical| Mapping {
+                        kanji: String::new(),
+                        modern: reading.modern,
+                        historical,
+                    })
+            })
+            .collect::<Vec<_>>();
+        let inference = build_historical_inference(&explicit_mappings);
+        let mut outputs = Outputs::create(&dictionary_partial, &mapping_partial)?;
+        for (title, params) in &collected {
+            let readings = parse_on_readings(params);
+            outputs.write_kanji(title, &readings, &inference)?;
+        }
+        outputs.dictionary.flush()?;
+        outputs.mappings.flush()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&dictionary_partial);
+        let _ = fs::remove_file(&mapping_partial);
+        return result;
     }
-    outputs.dictionary.flush()?;
-    outputs.mappings.flush()?;
+    fs::rename(&dictionary_partial, dictionary)?;
+    fs::rename(&mapping_partial, mapping)?;
     Ok(())
+}
+
+fn main() {
+    let mut args = env::args().skip(1);
+    let Some(ids_file) = args.next() else {
+        let _ = usage();
+        process::exit(2);
+    };
+    let Some(xml_file) = args.next() else {
+        let _ = usage();
+        process::exit(2);
+    };
+    let dictionary = args.next().unwrap_or_else(|| "tmp.jion".to_string());
+    let mapping = args
+        .next()
+        .unwrap_or_else(|| "kanji_readings.tsv".to_string());
+    if let Err(error) = generate(
+        &ids_file,
+        &xml_file,
+        Path::new(&dictionary),
+        Path::new(&mapping),
+    ) {
+        eprintln!("jion: {error}");
+        process::exit(1);
+    }
 }

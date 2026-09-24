@@ -1,4 +1,14 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use super::jisyo::Jisyo;
+
+static ROW_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^\s*(\d+)\s+(\d*)[ \t]+([^ ]*)[ \t]+([^ ]+)[ \t]+(.*?)[ \t]+(-?\d+)°(\d+)'\s+(-?\d+)°(\d+)'\s+([A-Za-z ]+)$",
+    )
+    .expect("internal error: invalid gazetteer row regex")
+});
 
 /// Generate dictionary entries from text extracted from the Gazetteer of
 /// Japan PDF by `pdftotext -layout`.
@@ -8,12 +18,18 @@ pub fn generate_jisyo(pdf_text: &str) -> Jisyo {
         let Some(kanji) = fallback_kanji(&row) else {
             continue;
         };
+        let official_kana = strip_parenthetical(&row.kana);
+        let official_romanized = strip_parenthetical(&row.romanized);
         for reading in official_and_alternate_readings(&row.kana) {
             jisyo.add_entry(&reading, kanji.clone());
 
-            if let Some(base) = base_entry(&kanji, &row.kana, &row.romanized) {
-                if let Some(base_reading) = reading.strip_suffix(&base.kana_suffix) {
-                    jisyo.add_entry(base_reading, base.candidate);
+            if row.classification == "Municipality" {
+                if let Some(base) = base_entry(&kanji, official_kana, official_romanized) {
+                    if let Some(base_reading) = reading.strip_suffix(base.kana_suffix) {
+                        if !base_reading.is_empty() {
+                            jisyo.add_entry(base_reading, base.candidate);
+                        }
+                    }
                 }
             }
         }
@@ -47,7 +63,17 @@ fn official_and_alternate_readings(kana: &str) -> Vec<String> {
 }
 
 fn strip_alternates(kana: &str) -> &str {
-    kana.split_once('（').map_or(kana, |(official, _)| official)
+    strip_parenthetical(kana)
+}
+
+fn strip_parenthetical(value: &str) -> &str {
+    if let Some((head, _)) = value.split_once('（') {
+        return head.trim();
+    }
+    if let Some((head, _)) = value.split_once(" (") {
+        return head.trim();
+    }
+    value.trim()
 }
 
 fn base_entry<'a>(kanji: &'a str, kana: &str, romanized: &str) -> Option<BaseEntry<'a>> {
@@ -100,13 +126,8 @@ struct Row {
 /// Parse one PDF table row. The grid code is absent for undersea features.
 /// The kanji field is also absent for a small number of rows in the PDF text
 /// layer; those rows are parsed as incomplete and skipped by the generator.
-#[allow(clippy::type_complexity)]
 fn parse_row(line: &str) -> Option<Row> {
-    let pattern = regex::Regex::new(
-        r"^\s*(\d+)\s+(\d*)[ \t]+([^ ]*)[ \t]+([^ ]+)[ \t]+(.*?)[ \t]+(-?\d+)°(\d+)'\s+(-?\d+)°(\d+)'\s+([A-Za-z ]+)$",
-    )
-    .unwrap();
-    let captures = pattern.captures(line)?;
+    let captures = ROW_REGEX.captures(line)?;
     let grid = if captures[2].is_empty() {
         None
     } else {

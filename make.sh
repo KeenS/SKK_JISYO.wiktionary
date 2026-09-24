@@ -59,6 +59,7 @@ fetch_data() {
         echo "Fetching data"
         wget -N \
              https://dumps.wikimedia.org/jawiktionary/latest/jawiktionary-latest-categorylinks.sql.gz \
+             https://dumps.wikimedia.org/jawiktionary/latest/jawiktionary-latest-linktarget.sql.gz \
              https://dumps.wikimedia.org/jawiktionary/latest/jawiktionary-latest-pages-articles.xml.bz2
         echo "Decompressing data"
         if [ $(find . -mmin -5 | wc -l) = 0 ] ; then
@@ -66,6 +67,7 @@ fetch_data() {
             return 0
         fi
         zcat  jawiktionary-latest-categorylinks.sql.gz   > jawiktionary-latest-categorylinks.sql
+        zcat  jawiktionary-latest-linktarget.sql.gz   > jawiktionary-latest-linktarget.sql
         bzcat jawiktionary-latest-pages-articles.xml.bz2 > jawiktionary-latest-pages-articles.xml
     )
 }
@@ -118,12 +120,14 @@ generate() {
         echo
         echo "Preparing Database"
         docker exec  -i wiktionary mysql wiktionary < "$CATLINK"
+        docker exec  -i wiktionary mysql wiktionary < "$LINKTARGET"
         echo "Extracting page ids of kanji articles"
-        # 漢字 = 0xE6BCA2E5AD97
-        # namespace 14: category
-        # SELECT lt_id FROM linktarget WHERE lt_title = 0xE6BCA2E5AD97 AND lt_namespace = 14;
-        # -> 90955
-        docker exec -i wiktionary mysql wiktionary --skip-column-names -B -e 'SELECT cl_from FROM categorylinks WHERE cl_target_id = 90955 ORDER BY cl_from' > ids.txt
+        # 漢字 encoded as UTF-8. The linktarget id is assigned per dump import.
+        docker exec -i wiktionary mysql wiktionary --skip-column-names -B -e 'SELECT cl_from FROM categorylinks WHERE cl_target_id = (SELECT lt_id FROM linktarget WHERE lt_namespace = 14 AND lt_title = 0xE6BCA2E5AD97) ORDER BY cl_from' > ids.txt
+        if [ ! -s ids.txt ]; then
+            echo "漢字 category id was not found in linktarget" >&2
+            exit 1
+        fi
         echo "Stopping MySQL"
         docker stop wiktionary
         echo "Generating prototype of dictionaries"
@@ -193,12 +197,14 @@ main() {
         esac
     done
 
-    if [ $# = 2 ]; then
+    if [ $# = 3 ]; then
         CATLINK="$1"
-        ARTICLES="$2"
+        LINKTARGET="$2"
+        ARTICLES="$3"
     else
         fetch_data
         CATLINK=data/jawiktionary-latest-categorylinks.sql
+        LINKTARGET=data/jawiktionary-latest-linktarget.sql
         ARTICLES=data/jawiktionary-latest-pages-articles.xml
     fi
     generate

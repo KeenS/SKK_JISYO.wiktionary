@@ -165,15 +165,26 @@ pub fn build_historical_inference(mappings: &[Mapping]) -> HashMap<String, Strin
     let mut result = HashMap::new();
     for (modern, historicals) in by_modern {
         let total: usize = historicals.iter().map(|(_, count)| count).sum();
-        if total < MIN_INFERENCE_SUPPORT {
-            continue;
+        let mut best: Option<(String, usize)> = None;
+        let mut tied = false;
+        for (historical, count) in historicals {
+            match &best {
+                Some((_, best_count)) if count > *best_count => {
+                    best = Some((historical, count));
+                    tied = false;
+                }
+                Some((_, best_count)) if count == *best_count => tied = true,
+                None => best = Some((historical, count)),
+                _ => {}
+            }
         }
-        let Some((historical, _)) = historicals
-            .into_iter()
-            .max_by_key(|(historical, count)| (*count, historical.clone()))
-        else {
+        let Some((historical, count)) = best else {
             continue;
         };
+        let others = total - count;
+        if tied || count < MIN_INFERENCE_SUPPORT || count <= others {
+            continue;
+        }
         result.insert(modern, historical);
     }
     result
@@ -405,5 +416,31 @@ mod tests {
         let inference = build_historical_inference(&explicit);
         assert_eq!(inference.get("せい").map(String::as_str), Some("せぃ"));
         assert!(!inference.contains_key("どう"));
+    }
+
+    fn inference_mapping(modern: &str, historical: &str) -> Mapping {
+        Mapping {
+            kanji: String::new(),
+            modern: modern.into(),
+            historical: historical.into(),
+        }
+    }
+
+    #[test]
+    fn inference_rejects_a_split_without_a_strict_majority() {
+        let samples = (0..3)
+            .map(|_| inference_mapping("せい", "せぃ"))
+            .chain((0..2).map(|_| inference_mapping("せい", "さい")))
+            .collect::<Vec<_>>();
+        assert!(build_historical_inference(&samples).is_empty());
+    }
+
+    #[test]
+    fn inference_rejects_a_tie() {
+        let samples = (0..5)
+            .map(|_| inference_mapping("せい", "せぃ"))
+            .chain((0..5).map(|_| inference_mapping("せい", "さい")))
+            .collect::<Vec<_>>();
+        assert!(build_historical_inference(&samples).is_empty());
     }
 }

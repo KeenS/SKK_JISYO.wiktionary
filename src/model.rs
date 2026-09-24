@@ -136,8 +136,16 @@ impl Page {
     }
 }
 
-fn is_kanji(ch: char) -> bool {
-    matches!(ch, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}')
+pub fn is_kanji(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{3400}'..='\u{4DBF}'
+            | '\u{4E00}'..='\u{9FFF}'
+            | '\u{F900}'..='\u{FAFF}'
+            | '\u{20000}'..='\u{2A6DF}'
+            | '\u{2A700}'..='\u{2EBEF}'
+            | '\u{30000}'..='\u{3134F}'
+    )
 }
 
 #[cfg(test)]
