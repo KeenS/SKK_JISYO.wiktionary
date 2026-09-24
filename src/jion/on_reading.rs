@@ -84,8 +84,18 @@ pub fn parse_on_readings(params: &str) -> Vec<OnReading> {
     readings
 }
 
+pub fn parse_kun_readings(params: &str) -> Vec<String> {
+    parse_named_readings(params, "訓")
+}
+
 pub fn parse_common_readings(params: &str) -> Vec<String> {
-    parse_named_readings(params, "常用")
+    let mut readings = parse_named_readings(params, "常用");
+    for reading in parse_kun_readings(params) {
+        if !readings.contains(&reading) {
+            readings.push(reading);
+        }
+    }
+    readings
 }
 
 pub fn parse_dictionary_on_readings(params: &str) -> Vec<String> {
@@ -105,7 +115,8 @@ fn parse_named_readings(params: &str, name: &str) -> Vec<String> {
     let regex = Regex::new(&pattern).expect("internal error: invalid named reading regex");
     for captures in regex.captures_iter(params) {
         for pair in captures[1].split(',') {
-            let reading = pair.split('<').next().unwrap_or_default().trim();
+            let reading = pair.split('-').next().unwrap_or_default().trim();
+            let reading = reading.split('<').next().unwrap_or_default().trim();
             let reading = katakana_to_hiragana(reading);
             if is_hiragana_reading(&reading) && !readings.contains(&reading) {
                 readings.push(reading);
@@ -274,6 +285,25 @@ mod tests {
         let readings =
             parse_common_readings("常用=リョウ|施策=教育:4|呉音=リョウ<レウ|漢音=リョウ<レウ");
         assert_eq!(readings, vec!["りょう".to_string()]);
+    }
+
+    #[test]
+    fn parses_kun_readings_from_kanji_template() {
+        let readings = parse_kun_readings(
+            "常用=カイ,エ,あ-う|施策=教育:2|呉音=エ&lt;ヱ,ケ|漢音=カイ&lt;クヮイ|訓=あ-う,たまたま,あつ-まる,あつ-める",
+        );
+        assert!(readings.contains(&"あ".to_string()));
+        assert!(readings.contains(&"たまたま".to_string()));
+        assert!(readings.contains(&"あつ".to_string()));
+    }
+
+    #[test]
+    fn parses_kun_readings_with_okuri_marker() {
+        let readings = parse_kun_readings("訓=あ-う,たまたま,あつ-まる,あつ-める");
+        assert_eq!(
+            readings,
+            vec!["あ".to_string(), "たまたま".to_string(), "あつ".to_string()]
+        );
     }
 
     #[test]

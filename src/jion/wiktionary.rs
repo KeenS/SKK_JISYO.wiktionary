@@ -80,6 +80,10 @@ fn bold_wagokanji_sources(text: &str) -> impl Iterator<Item = (String, String)> 
 }
 
 fn bold_wagokanji_pair(body: &str) -> Option<(String, String)> {
+    bold_bracket_wagokanji_pair(body).or_else(|| bold_paren_wagokanji_pair(body))
+}
+
+fn bold_paren_wagokanji_pair(body: &str) -> Option<(String, String)> {
     let end = body.find('）')?;
     let content = &body[..end + '）'.len_utf8()];
     let start = content.find("'''")? + 3;
@@ -92,6 +96,25 @@ fn bold_wagokanji_pair(body: &str) -> Option<(String, String)> {
     let reading_start = content[bold_end..].find('（')? + bold_end + '（'.len_utf8();
     let reading_end = content[bold_end..].find('）')? + bold_end;
     let reading = clean_wikitext(&content[reading_start..reading_end]);
+    if !hiragana_only(&reading) {
+        return None;
+    }
+    Some((candidate, reading))
+}
+
+fn bold_bracket_wagokanji_pair(body: &str) -> Option<(String, String)> {
+    let end = body.find("【")?;
+    let content = &body[..end];
+    let start = content.find("'''")? + 3;
+    let bold_end = content[start..].find("'''")? + start;
+    let candidate = clean_wikitext(&content[start..bold_end]);
+    if !candidate.contains(is_kanji) {
+        return None;
+    }
+
+    let bracket_start = end + "【".len();
+    let bracket_end = body[bracket_start..].find("】")?;
+    let reading = clean_wikitext(&body[bracket_start..bracket_start + bracket_end]);
     if !hiragana_only(&reading) {
         return None;
     }
@@ -268,6 +291,20 @@ fn template_bodies_after<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
         .collect()
 }
 
+fn bare_template_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
+    let marker = format!("{{{{{name}}}}}");
+    let mut result = Vec::new();
+    let mut rest = text;
+    while let Some(index) = rest.find(marker.as_str()) {
+        let body = &rest[index + marker.len()..];
+        if let Some(end) = body.find("\n") {
+            result.push(&body[..end]);
+        }
+        rest = &rest[index + marker.len()..];
+    }
+    result
+}
+
 fn split_params(body: &str) -> Vec<&str> {
     body.split('|').map(str::trim).collect()
 }
@@ -372,6 +409,10 @@ pub fn is_symbol(title: &str) -> bool {
         .chars()
         .all(|ch| !ch.is_alphanumeric() && !is_kanji(ch))
 }
+
+static GODAN_GOBI: [char; 13] = [
+    'う', 'く', 'ぐ', 'す', 'ず', 'つ', 'づ', 'ぬ', 'ふ', 'ぶ', 'ぷ', 'む', 'る',
+];
 
 static KANJITAB_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[ぁ-ゖ0-9]+$").expect("internal error: invalid kanjitab regex"));
@@ -770,8 +811,24 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    page.modern_conjugations = modern_conjugation(text);
     page.sahen_conjugations = sahen_conjugation(text);
+    page.modern_conjugations = modern_conjugation(text);
+    for body in template_bodies(text, "日本語五段活用") {
+        for conjugation in modern_godan_conjugations(&page, body) {
+            if !page.modern_conjugations.contains(&conjugation) {
+                page.modern_conjugations.push(conjugation);
+            }
+        }
+    }
+    if template_bodies(text, "日本語五段活用").is_empty() {
+        for body in bare_template_bodies(text, "日本語五段活用") {
+            for conjugation in modern_godan_conjugations(&page, body) {
+                if !page.modern_conjugations.contains(&conjugation) {
+                    page.modern_conjugations.push(conjugation);
+                }
+            }
+        }
+    }
 
     page.kangokana_candidates = kangokana_candidates(text);
     page.new_style_variants = new_style_variants(text);
@@ -812,7 +869,7 @@ fn extract_bracket_titles(body: &str) -> Vec<String> {
             break;
         };
         let value = &body[start..start + end];
-        for candidate in value.split(['、', '・']) {
+        for candidate in value.split(['、', '・', ',', '，']) {
             let candidate = candidate.trim_matches(['（', '）', ' ']);
             let candidate = clean_wikitext(candidate);
             if !candidate.is_empty() && !titles.contains(&candidate) {
@@ -1114,7 +1171,11 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
         }
     }
 
-    for candidate in &page.verb_titles {
+    let mut verb_candidates = page.verb_titles.clone();
+    if verb_candidates.is_empty() {
+        verb_candidates.push(page.title.clone());
+    }
+    for candidate in &verb_candidates {
         let is_non_verb_okuri = page
             .adjective_titles
             .iter()
@@ -1130,6 +1191,8 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             || is_kana_reading && page.verb_titles.len() == 1 && !page.title.chars().any(is_kanji);
         entries.extend(okuri_candidates(page, candidate, generate_onbin));
     }
+    let mut modern_conjugation_entries_vec = modern_conjugation_entries(page);
+    entries.splice(0..0, modern_conjugation_entries_vec.drain(..));
     for candidate in &page.adjective_titles {
         if page.verb_titles.contains(candidate) {
             continue;
@@ -1226,10 +1289,7 @@ pub fn modern_conjugation_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             continue;
         }
 
-        let Some(candidate) = modern_conjugation_candidate(page, conjugation) else {
-            continue;
-        };
-
+        let candidates = modern_conjugation_candidates(page, conjugation);
         let mut seen = Vec::new();
         for romaji in renyou_romaji {
             if seen.contains(&romaji) {
@@ -1239,12 +1299,14 @@ pub fn modern_conjugation_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             let mut reading = String::with_capacity(conjugation.stem.len() + 1);
             reading.push_str(&conjugation.stem);
             reading.push(romaji);
-            entries.push(WiktionaryEntry {
-                reading,
-                candidate: candidate.clone(),
-                suru: false,
-                source: EntrySource::WagoOkuri,
-            });
+            for candidate in &candidates {
+                entries.push(WiktionaryEntry {
+                    reading: reading.clone(),
+                    candidate: candidate.clone(),
+                    suru: false,
+                    source: EntrySource::WagoOkuri,
+                });
+            }
         }
     }
     entries
@@ -1305,6 +1367,105 @@ fn modern_conjugation(conjugation: &str) -> Vec<ModernConjugation> {
     result
 }
 
+fn modern_godan_conjugation(conjugation: &str, gobi: char) -> Vec<ModernConjugation> {
+    let stem = conjugation
+        .strip_suffix(gobi)
+        .filter(|stem| !stem.is_empty() && hiragana_only(stem))
+        .map(str::to_string)
+        .unwrap_or_default();
+    let renyou = match gobi {
+        'う' => vec!["い".to_string(), "っ".to_string()],
+        'く' => vec!["き".to_string(), "い".to_string()],
+        'ぐ' => vec!["ぎ".to_string(), "い".to_string()],
+        'す' => vec!["し".to_string()],
+        'ず' => vec!["じ".to_string()],
+        'つ' => vec!["ち".to_string(), "っ".to_string()],
+        'づ' => vec!["ぢ".to_string()],
+        'ぬ' => vec!["に".to_string()],
+        'ふ' => vec!["ひ".to_string()],
+        'ぶ' => vec!["び".to_string(), "ん".to_string()],
+        'ぷ' => vec!["ぴ".to_string()],
+        'む' => vec!["み".to_string(), "ん".to_string()],
+        'ゆ' => vec!["ゆ".to_string()],
+        'る' => vec!["り".to_string(), "っ".to_string()],
+        _ => vec![],
+    };
+    let shuushi = match gobi {
+        'う' | 'く' | 'す' | 'つ' | 'ぬ' | 'ふ' | 'む' | 'る' => "う".to_string(),
+        'ぐ' => "ぐ".to_string(),
+        'ず' => "ず".to_string(),
+        'づ' => "づ".to_string(),
+        'ぶ' => "ぶ".to_string(),
+        'ぷ' => "ぷ".to_string(),
+        'ゆ' => "ゆ".to_string(),
+        _ => String::new(),
+    };
+    if !hiragana_only(&shuushi)
+        || renyou.is_empty()
+        || renyou.iter().any(|suffix| !hiragana_only(suffix))
+    {
+        return Vec::new();
+    }
+    vec![ModernConjugation {
+        stem,
+        renyou,
+        shuushi,
+    }]
+}
+
+fn modern_godan_conjugations(page: &JapanesePage, body: &str) -> Vec<ModernConjugation> {
+    let kana = split_params(body)
+        .into_iter()
+        .find_map(|param| param.strip_prefix("kana="))
+        .map(clean_wikitext);
+    let Some(kana) = kana else {
+        return verb_godan_conjugations(page);
+    };
+    let result = godan_conjugations_for_kana(kana.as_str());
+    if !result.is_empty() {
+        return result;
+    }
+    verb_godan_conjugations(page)
+}
+
+fn godan_conjugations_for_kana(kana: &str) -> Vec<ModernConjugation> {
+    let kana = clean_wikitext(kana);
+    let Some(conjugation) = GODAN_GOBI
+        .iter()
+        .copied()
+        .filter_map(|gobi| modern_godan_conjugation(&kana, gobi).pop())
+        .find(|conjugation| !conjugation.stem.is_empty())
+    else {
+        return Vec::new();
+    };
+    vec![conjugation]
+}
+
+fn verb_godan_conjugations(page: &JapanesePage) -> Vec<ModernConjugation> {
+    let mut result = Vec::new();
+    if !hiragana_only(&page.title) {
+        return result;
+    }
+    for title in &page.verb_titles {
+        if !title.contains(is_kanji) {
+            continue;
+        }
+        let (_, suffix) = split_candidate(title);
+        let Some(gobi) = suffix.chars().next() else {
+            continue;
+        };
+        if !GODAN_GOBI.contains(&gobi) {
+            continue;
+        }
+        if let Some(conjugation) = modern_godan_conjugation(&page.title, gobi).pop() {
+            if !result.contains(&conjugation) {
+                result.push(conjugation);
+            }
+        }
+    }
+    result
+}
+
 fn sahen_conjugation(conjugation: &str) -> Vec<SahenConjugation> {
     let mut result = Vec::new();
     for body in template_bodies(conjugation, "日本語サ変活用") {
@@ -1339,20 +1500,26 @@ fn sahen_conjugation_candidate(page: &JapanesePage) -> Option<String> {
         .find(|candidate| !candidate.is_empty())
 }
 
-fn modern_conjugation_candidate(
+fn modern_conjugation_candidates(
     page: &JapanesePage,
     conjugation: &ModernConjugation,
-) -> Option<String> {
-    for title in &page.adjective_titles {
+) -> Vec<String> {
+    let mut result = Vec::new();
+    for title in page.adjective_titles.iter().chain(page.verb_titles.iter()) {
         let (stem, suffix) = split_candidate(title);
         if !title.contains(is_kanji) {
             continue;
         }
-        if !stem.is_empty() && *suffix == conjugation.shuushi && title.ends_with(suffix) {
-            return Some(stem.to_string());
+        if !stem.is_empty()
+            && !suffix.is_empty()
+            && *suffix == conjugation.shuushi
+            && title.ends_with(suffix)
+            && !result.contains(&stem.to_string())
+        {
+            result.push(stem.to_string());
         }
     }
-    None
+    result
 }
 
 fn modern_conjugation_suffixes(value: &str) -> Vec<String> {
@@ -1876,6 +2043,42 @@ mod tests {
                     source: EntrySource::WagoOkuri,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn converts_bracket_wagokanji_with_inline_reading() {
+        let page = parse_japanese_page(
+            "あう",
+            r#"{{DEFAULTSORT:あう}}
+===動詞===
+{{ja-wagokanji|あう}}{{ja-verb}}【[[会]]う】
+====活用====
+{{日本語五段活用}}
+'''あう'''【[[会]]う・[[逢]]う・[[遇]]う】
+#[[ひと|人]]と[[おなじ|同じ]][[場所]]で[[時間]]を[[共有]]する。[[会合]]する。
+#[[偶然性]]の[[つよい|強い]][[ばあし|場合]]は「遇う」を[[つかう|使う]]こともある。[[遭遇]]する。
+"#,
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec![
+                "あi /会/",
+                "あi /逢/",
+                "あi /遇/",
+                "あu /会/",
+                "あu /逢/",
+                "あu /遇/"
+            ],
+        );
+    }
+
+    #[test]
+    fn splits_bracket_titles_with_commas() {
+        let page = parse_japanese_page("とぐ", "==={{verb}}===\n{{ja-verb}}【[[研]]ぐ, [[磨]]ぐ】");
+        assert_eq!(
+            page.verb_titles,
+            vec!["研ぐ".to_string(), "磨ぐ".to_string()]
         );
     }
 
