@@ -131,7 +131,7 @@ fn converts_wiktionary_fixture_end_to_end() {
     assert!(report_text.contains("jion_entries\t1"));
     assert!(report_text.contains("shared_entries\t0"));
     assert!(report_text.contains("invalid_pages\t2"));
-    assert!(report_text.contains("redirect_entries\t2"));
+    assert!(report_text.contains("redirect_entries\t1"));
 
     fs::remove_file(output).unwrap();
     fs::remove_file(jion_output).unwrap();

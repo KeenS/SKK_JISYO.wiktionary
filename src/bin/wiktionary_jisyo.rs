@@ -433,6 +433,15 @@ fn page_entries(
             }
         }
     }
+    let mut unique_words = Vec::new();
+    for word in words {
+        if !unique_words.iter().any(|entry: &WiktionaryEntry| {
+            entry.reading == word.reading && entry.candidate == word.candidate
+        }) {
+            unique_words.push(word);
+        }
+    }
+    words = unique_words;
     let entries = words.iter().map(to_entry).collect();
     (words, entries, jion_entries)
 }

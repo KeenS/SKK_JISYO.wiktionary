@@ -593,6 +593,11 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
             page.wagokanji_sources.push(source);
         }
     }
+    for source in &page.wagokanji_sources {
+        if wago_source_entry(source).is_none() && !page.noun_readings.contains(&source.reading) {
+            page.noun_readings.push(source.reading.clone());
+        }
+    }
     for body in template_bodies(text, "ja-noun") {
         for param in split_params(body) {
             if param.contains('=') {
@@ -627,8 +632,8 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
                 continue;
             }
             let reading = clean_wikitext(param);
-            if hiragana_only(&reading) && !page.pron_readings.contains(&reading) {
-                page.pron_readings.push(reading);
+            if hiragana_only(&reading) && !page.noun_readings.contains(&reading) {
+                page.noun_readings.push(reading);
             }
         }
     }
@@ -1166,6 +1171,20 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
                 candidate: page.title.clone(),
                 suru: false,
                 source: EntrySource::KanjiReading,
+            });
+        }
+        for reading in matched_readings(page) {
+            if entries
+                .iter()
+                .any(|entry: &WiktionaryEntry| entry.reading == reading)
+            {
+                continue;
+            }
+            entries.push(WiktionaryEntry {
+                reading,
+                candidate: page.title.clone(),
+                suru: false,
+                source: EntrySource::Idiom,
             });
         }
     }
@@ -2159,6 +2178,18 @@ mod tests {
                 suru: false,
                 source: EntrySource::Idiom,
             }]
+        );
+    }
+
+    #[test]
+    fn converts_noun_reading_without_ja_kanjitab() {
+        let page = parse_japanese_page(
+            "定量",
+            "=={{ja}}==\n=== {{noun}} ===\n'''[[定]][[量]]'''（[[ていりょう]]）",
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec!["ていりょう /定量/".to_string()]
         );
     }
 
