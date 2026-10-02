@@ -638,6 +638,16 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
+    for body in template_bodies(text, "ja-accent-common") {
+        // Template bodies omit the leading parameter delimiter. The first
+        // positional argument in the body is the accent kind (a/h/n).
+        for param in accent_common_reading(body) {
+            if !page.noun_readings.contains(&param) {
+                page.noun_readings.push(param);
+            }
+        }
+    }
+
     for body in template_bodies(text, "ja-verb")
         .into_iter()
         .chain(template_bodies_after(text, "ja-verb"))
@@ -744,6 +754,20 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
             }
         }
     }
+    for body in head_candidate_bodies(text, "adjective") {
+        for title in extract_bracket_titles(body) {
+            if !page.adjective_titles.contains(&title) {
+                page.adjective_titles.push(title);
+            }
+        }
+    }
+    for body in head_candidate_bodies(text, "形容詞") {
+        for title in extract_bracket_titles(body) {
+            if !page.adjective_titles.contains(&title) {
+                page.adjective_titles.push(title);
+            }
+        }
+    }
     for body in head_candidate_bodies(text, "adverb") {
         for title in extract_bracket_titles(body) {
             if !page.adverb_titles.contains(&title) {
@@ -830,6 +854,13 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
 
     page.sahen_conjugations = sahen_conjugation(text);
     page.modern_conjugations = modern_conjugation(text);
+    for body in template_bodies(text, "日本語形容詞活用") {
+        for conjugation in modern_godan_conjugations(&page, body) {
+            if !page.modern_conjugations.contains(&conjugation) {
+                page.modern_conjugations.push(conjugation);
+            }
+        }
+    }
     for body in template_bodies(text, "日本語五段活用") {
         for conjugation in modern_godan_conjugations(&page, body) {
             if !page.modern_conjugations.contains(&conjugation) {
@@ -861,6 +892,34 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
     }
 
     page
+}
+
+fn accent_common_reading(body: &str) -> Vec<String> {
+    let params: Vec<&str> = split_params(body)
+        .into_iter()
+        .filter(|param| !param.contains('='))
+        .collect();
+    let Some(kind) = params.first().copied().map(clean_wikitext) else {
+        return Vec::new();
+    };
+    if !matches!(kind.as_str(), "a" | "h" | "n") {
+        return Vec::new();
+    }
+    let mut reading = String::new();
+    for param in params.iter().skip(1) {
+        reading.push_str(&clean_wikitext(param));
+    }
+    let mut result = Vec::new();
+    for reading in reading
+        .split(['-', '－'])
+        .map(katakana_to_hiragana)
+        .filter(|reading| hiragana_only(reading))
+    {
+        if !result.contains(&reading) {
+            result.push(reading);
+        }
+    }
+    result
 }
 
 fn head_candidate_bodies<'a>(text: &'a str, part_of_speech: &str) -> Vec<&'a str> {
@@ -1236,7 +1295,12 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
         if page.verb_titles.contains(candidate) {
             continue;
         }
-        entries.extend(okuri_candidates(page, candidate, false));
+        let adjective_entries = adjective_okuri_entries(page, candidate);
+        if !adjective_entries.is_empty() {
+            entries.extend(adjective_entries);
+        } else {
+            entries.extend(okuri_candidates(page, candidate, false));
+        }
     }
     for candidate in &page.adverb_titles {
         if page.verb_titles.contains(candidate) || page.adjective_titles.contains(candidate) {
@@ -1454,7 +1518,29 @@ fn modern_godan_conjugations(page: &JapanesePage, body: &str) -> Vec<ModernConju
         .find_map(|param| param.strip_prefix("kana="))
         .map(clean_wikitext);
     let Some(kana) = kana else {
-        return verb_godan_conjugations(page);
+        // On adjective pages without an explicit reading, derive the stem
+        // from the adjective title rather than the page title. For example,
+        // on the page 深い, the title is the kana form ふかい and the
+        // adjective title is 深い.
+        let adjective = page
+            .adjective_titles
+            .iter()
+            .find(|title| title.contains(is_kanji))
+            .cloned()
+            .unwrap_or_else(|| page.title.clone());
+        // 形容詞の「い」は語幹に含めず、直前の子音から送り仮名を作る。
+        if let Some(stem) = adjective.strip_suffix('い') {
+            if hiragana_only(stem) && !stem.is_empty() {
+                return godan_conjugations_for_kana(stem)
+                    .into_iter()
+                    .filter(|conjugation| !conjugation.stem.is_empty())
+                    .collect();
+            }
+        }
+        return godan_conjugations_for_kana(&adjective)
+            .into_iter()
+            .filter(|conjugation| !conjugation.stem.is_empty())
+            .collect();
     };
     let result = godan_conjugations_for_kana(kana.as_str());
     if !result.is_empty() {
@@ -1699,11 +1785,13 @@ fn okuri_candidate(page: &JapanesePage, candidate: &str) -> Option<WiktionaryEnt
     }
 
     let romaji = okuri_romaji(suffix.chars().next()?)?;
+    let stripped_suffix = suffix;
     let stem_reading = page
         .wagokanji_readings
         .iter()
         .chain(page.default_sorts.iter())
-        .filter_map(|reading| reading.strip_suffix(suffix))
+        .chain(page.noun_readings.iter())
+        .filter_map(|reading| reading.strip_suffix(stripped_suffix))
         .filter(|reading| reading.chars().count() >= stem.chars().count())
         .max_by_key(|reading| reading.chars().count())?;
 
@@ -1739,6 +1827,7 @@ fn okuri_candidates_all(page: &JapanesePage, candidate: &str) -> Vec<WiktionaryE
         .wagokanji_readings
         .iter()
         .chain(page.default_sorts.iter())
+        .chain(page.noun_readings.iter())
         .filter_map(|reading| reading.strip_suffix(suffix))
         .filter(|reading| reading.chars().count() >= stem.chars().count())
         .filter(|reading| {
@@ -1762,6 +1851,45 @@ fn okuri_candidates_all(page: &JapanesePage, candidate: &str) -> Vec<WiktionaryE
         });
     }
     entries
+}
+
+fn adjective_okuri_entries(page: &JapanesePage, candidate: &str) -> Vec<WiktionaryEntry> {
+    if !page.adjective_titles.iter().any(|title| title == candidate) {
+        return Vec::new();
+    }
+    let (stem, suffix) = split_candidate(candidate);
+    if stem.is_empty() || suffix != "い" {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    for reading in page
+        .wagokanji_readings
+        .iter()
+        .chain(page.default_sorts.iter())
+        .chain(page.noun_readings.iter())
+    {
+        let Some(stem_reading) = reading.strip_suffix('い') else {
+            continue;
+        };
+        if !hiragana_only(stem_reading) || stem_reading.chars().count() < stem.chars().count() {
+            continue;
+        }
+        let mut key = String::with_capacity(stem_reading.len() + 1);
+        key.push_str(stem_reading);
+        // 形容詞の連用形「く」から送り仮名を作る。
+        key.push('k');
+        let entry = WiktionaryEntry {
+            reading: key,
+            candidate: stem.to_string(),
+            suru: false,
+            source: EntrySource::WagoOkuri,
+        };
+        if !result.contains(&entry) {
+            result.push(entry);
+        }
+    }
+    result
 }
 
 fn wago_source_entry(source: &WagokanjiSource) -> Option<WiktionaryEntry> {
@@ -2300,6 +2428,18 @@ mod tests {
         assert_eq!(
             page.default_sorts,
             vec!["しんねんあけましてこめでとうこさいます".to_string()]
+        );
+    }
+
+    #[test]
+    fn converts_adjective_title_without_ja_adj_template() {
+        let page = parse_japanese_page(
+            "ふかい",
+            "=={{L|ja}}==\n==={{etym}}===\n==={{pron}}===\n{{ja-pron|acc=2}}\n{{ja-accent-common|region=京阪|a|ふ|かい}}\n==={{adjective}}===\n{{head|ja|adjective}}【[[深]]い】",
+        );
+        assert_eq!(
+            entry_strings(&wiktionary_entries(&page)),
+            vec!["ふかk /深/".to_string()]
         );
     }
 
