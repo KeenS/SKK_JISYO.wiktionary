@@ -1,0 +1,2 @@
+; この辞書は日本郵政グループの郵便番号データ[^1]を加工して生成されています
+; [^1]: https://www.post.japanpost.jp/zipcode/utf/zip/utf_ken_all.zip

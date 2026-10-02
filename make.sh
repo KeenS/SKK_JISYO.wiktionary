@@ -106,6 +106,21 @@ generate_gsi() {
     )
 }
 
+generate_post() {
+    (
+        cd "$SCRIPT_DIR"
+        echo "Checking post dependencies"
+        check_dependency cargo
+        check_dependency skkdic-sort
+        check_dependency skkdic-expr2
+        echo "Generating post dictionary"
+        cargo run --release --bin post -- \
+            data/utf_ken_all.csv tmp.post
+        skkdic-sort < tmp.post | skkdic-expr2 > tmp.post.sorted
+        cat post-header.txt tmp.post.sorted > SKK-JISYO.post
+    )
+}
+
 generate() {
     (
         cd "$SCRIPT_DIR"
@@ -181,6 +196,10 @@ main() {
                 GSI_TEXT=data/gazetteer-of-japan.txt
             fi
             generate_gsi
+            exit 0
+            ;;
+            --post)
+            generate_post
             exit 0
             ;;
             --) shift; break;;

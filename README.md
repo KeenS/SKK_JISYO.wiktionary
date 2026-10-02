@@ -6,11 +6,13 @@
 * SKK-JISYO.jion: 字音仮名遣いで変換する辞書です
 * SKK-JISYO.ojp: 古典日本語（歴史的仮名遣い）の変換辞書です
 * SKK-JISYO.gsi: 地名集日本から生成した地名の変換辞書です
+* SKK-JISYO.post: 日本郵便の郵便番号データから生成した住所の変換辞書です
 
 # ライセンス
 
 * Wiktionary由来の辞書はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)で提供されます。
 * `SKK-JISYO.gsi` は国土地理院のデータを加工して生成しており、公共データ利用規約（第1.0版）に基づき[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)互換の条件で提供されます。
+* `SKK-JISYO.post` は日本郵便の郵便番号データを加工して生成しており、日本郵便の利用規約に基づき提供されます。
 * その他のコード類はMITライセンスです。
 
 # 辞書について
@@ -44,6 +46,30 @@ SKK-JISYO.Lとの違いは以下の通りです。
 ### 使い方
 
 通常のSKK辞書として使えます。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
+
+## SKKの住所辞書
+### これは何？
+`SKK-JISYO.post` は[日本郵便の郵便番号-住所対応表](https://www.post.japanpost.jp/service/search/zipcode/download/utf-zip.html)から生成したSKK辞書です。国土地理院のデータでカバーできない字(あざ)レベルの地名を拾えるのでこちらもSKK-JISYO.gsiと併せてSKK-JISYO.wiktionaryの補助的な辞書として使うことを意図しています。利用規約は以下になっています。
+
+> 郵便番号データに限っては日本郵便株式会社は著作権を主張しません。自由に配布していただいて結構です。
+
+住所辞書は住所の読みからそのままの漢字変化の他、市区町村、都道府県を加えた住所を変換できます
+
+``` console
+まるのうち /丸の内/米沢市丸の内/山形県米沢市丸の内/丸内/寒河江市丸内/山形県寒河江市丸内/西白河郡矢吹町丸の内/福島県西白河郡矢吹 町丸の内/千代田区丸の内/東京都千代田区丸の内/富山市丸の内/富山県富山市丸の内/高岡市丸の内/富山県高岡市丸の内/氷見市丸の内/富山県氷見市丸の内/金沢市丸の内/石川県金沢市丸の内/甲府市丸の内/山梨県甲府市丸の内/松本市丸の内/長野県松本市丸の内/大垣市丸の内/岐阜県大垣市丸の内/名古屋市中区丸の内/愛知県名古屋市中区丸の内/丸之内/津市丸之内/三重県津市丸之内/名張市丸之内/三重県名張市丸之内/岡山市北区丸の内/岡山県岡山市北区丸の内/福山市丸之内/広島県福山市丸之内/高松市丸の内/香川県高松市丸の内/松山市丸之内/愛媛県松山市丸之内/宇和島市丸之内/愛媛県宇和島市丸之内/丸ノ内/高知市丸ノ内/高知県高知市丸ノ内/
+```
+
+また、郵便番号から住所を変換することもできます。
+
+``` console
+1000001 /東京都千代田区千代田/
+```
+
+## 使い方
+
+通常のSKK辞書として使えます。数字からの変換は「Q」から変換できます（SKKエンジンによって異なるかもしれません）。
+
+1つの辞書しか扱えないSKKエンジンを使っている場合は[skkdic-expr2](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=%BC%AD%BD%F1%A5%E1%A5%F3%A5%C6%A5%CA%A5%F3%A5%B9%A5%C4%A1%BC%A5%EB)などで1つにまとめて下さい。
 
 ## SKKの四角号碼辞書
 ### これは何？
@@ -132,43 +158,51 @@ wiktionaryに載っている古音から生成しているので、原義の字�
 
 # 自分で生成する
 
-自分でデータを生成する人のために手順を示す。簡単には以下のコマンドでwiktionaryからデータをダウンロードし、辞書の生成までできる。
+自分でデータを生成する人のために手順を示す。`make.sh` を使う方法と使わない方法がある。
+
+# `make.sh` を使う場合
+
+## Wiktionary系辞書
+
+Wiktionary、四角号碼、字音、古典日本語の各辞書を生成する。データをダウンロードしていない場合は `make.sh` がダウンロードから行う。
 
 ``` console
 $ ./make.sh
 ```
 
-国土地理院のデータをダウンロードし、生成するには以下のコマンドを使う。
-
-``` console
-$ ./make.sh --gsi
-```
-
-既にデータをダウンロードしてあるならそれを使うこともできる。
+既にダウンロードしてあるならデータを指定する。
 
 ``` console
 $ ./make.sh path/to/jawiktionary-latest-categorylinks.sql path/to/jawiktionary-latest-linktarget.sql path/to/jawiktionary-latest-pages-articles.xml
 ```
 
+## 地名辞書
 
-国土地理院の辞書は[地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)をダウンロードしてあるなら、一度PDFからテキストを抽出しておく
+[地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)からダウンロードしたPDFから生成する。データをダウンロードしていない場合は `make.sh` がダウンロードから行う。
 
 ``` console
-$ pdftotext -layout /path/to/data.pdf data/gazetteer-of-japan.txt
+$ ./make.sh --gsi
 ```
 
-そのあとテキストファイルを指定して `make.sh` を使う
+既にPDFからテキストを抽出してあるならテキストを指定する。
 
 ``` console
 $ ./make.sh --gsi data/gazetteer-of-japan.txt
 ```
 
+## 住所辞書
 
-`make.sh` を使わずに生成する場合は以下の手順を踏む。
+[日本郵便の郵便番号-住所対応表](https://www.post.japanpost.jp/service/search/zipcode/download/utf-zip.html)からダウンロードしたCSVから生成する。データをダウンロードしていない場合は `make.sh` がダウンロードから行う。
 
-### Wikitonaryデータの取得
+``` console
+$ ./make.sh --post
+```
 
-[Wikimediaプロジェクトのダンプ](https://dumps.wikimedia.org/backup-index.html)のjawikitonaryの最新版にいく。そこから必要なデータをダウンロードする。必要なデータは以下の2つ。
+# `make.sh` を使わない場合
+
+## Wikitonaryデータの取得
+
+[Wikimediaプロジェクトのダンプ](https://dumps.wikimedia.org/backup-index.html)のjawikitonaryの最新版にいく。そこから必要なデータをダウンロードする。必要なデータは以下の3つ。
 
 * `jawiktionary-*-categorylinks.sql`
 * `jawiktionary-*-linktarget.sql`
@@ -176,7 +210,7 @@ $ ./make.sh --gsi data/gazetteer-of-japan.txt
 
 ダウンロードしたらgzやbz2を解凍しておく。
 
-### MySQLのセットアップ
+## MySQLのセットアップ
 
 `categorylinks.sql` からデータを取り出すためにMySQLを立てる。dockerを使うと早い。
 
@@ -190,7 +224,7 @@ $ docker exec  -i wiktionary mysql wiktionary < jawiktionary-*-linktarget.sql
 
 sqlite3でできたら手軽でよかったが、スキーマの `unsigned` に対応していないので無理そうだった。
 
-### 漢字記事IDの取得
+## 漢字記事IDの取得
 
 ここから「カテゴリー:漢字」に属する記事のIDを取得する。 `ids.txt` に出力する。
 
@@ -204,7 +238,7 @@ MySQLはもう不要なので落としておく
 $ docker stop wiktionary
 ```
 
-### 辞書生成
+## Wiktionary系辞書の生成
 
 四角号碼と字音のデータを生成する
 
@@ -287,7 +321,7 @@ $ head output.log
 $ rm tmp.shikakugoma tmp.jion ids.txt
 ```
 
-### 地名辞書データのダウンロードとテキスト抽出
+## 地名データのダウンロードとテキスト抽出
 [地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)のpdfデータをdata/にダウンロードしておく
 
 ``` console
@@ -300,7 +334,7 @@ $ wget -N -O gazetteer-of-japan.pdf https://www.gsi.go.jp/common/000238259.pdf
 $ pdftotext -layout data/gazetteer-of-japan.pdf data/gazetteer-of-japan.txt
 ```
 
-### 地名辞書の生成
+## 地名辞書の生成
 
 コマンドを使って辞書を生成する
 
@@ -321,6 +355,32 @@ SKK-JISYO.gsi
 
 ``` console
 $ rm tmp.gsi
+```
+
+## 郵便データのダウンロード
+
+[日本郵便の郵便番号-住所対応表](https://www.post.japanpost.jp/service/search/zipcode/download/utf-zip.html)からダウンロードしておく
+
+``` console
+$ wget https://www.post.japanpost.jp/zipcode/utf/zip/utf_ken_all.zip
+$ unzip utf_ken_all.zip
+$ mv utf_ken_all.csv data/utf_ken_all.csv
+```
+
+## 住所辞書の生成
+
+コマンドを使って辞書を生成する
+
+``` console
+$ cargo run --release --bin post -- data/utf_ken_all.csv tmp.post
+$ skkdic-sort < tmp.post | skkdic-expr2 > tmp.post.sorted
+$ cat post-header.txt tmp.post.sorted > SKK-JISYO.post
+```
+
+中間生成ファイルは削除しておく
+
+``` console
+$ rm tmp.post tmp.post.sorted
 ```
 
 # 自動更新
