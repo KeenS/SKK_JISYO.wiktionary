@@ -1,0 +1,7 @@
+# Unihan fixture. Only kJapanese is a reading.
+U+7864	kJapanese	コウ ギョウ
+U+5CE1	kJapanese	キョウ コウ かい はざま
+U+4E00	kJapanese	イチ イツ ひと ひとつ
+U+4E00	kJapaneseOn	ICHI
+U+4E8C	kJapaneseOn	KOU
+U+660E	kJapanese	あかるい 明るい あきらか

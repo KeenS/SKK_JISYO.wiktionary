@@ -14,7 +14,8 @@ SYNOPSIS:
   $0 --gsi
 
 DESCRIPTION:
-  Generate dictionaries from Wiktionary. Give CATLINK as
+  Generate dictionaries from Wiktionary. Also download Unihan and
+  write SKK-JISYO.unihan. Give CATLINK as
   jawiktionary-*-categorylinks.sql and ARTICLES as
   jawiktionary-*-pages-articles.xml. 
 
@@ -39,11 +40,21 @@ check_dependency() {
 
 check_dependencies() {
     check_dependency wget
+    check_dependency unzip
     check_dependency zcat
     check_dependency bzcat
     check_dependency docker
     check_dependency cargo
     check_dependency skkdic-sort
+}
+
+fetch_unihan() {
+    (
+        cd "$SCRIPT_DIR/data"
+        echo "Fetching Unihan"
+        wget -N https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip
+        unzip -qo -j Unihan.zip Unihan_Readings.txt Unihan_DictionaryLikeData.txt
+    )
 }
 
 check_gsi_dependencies() {
@@ -125,6 +136,14 @@ generate() {
     (
         cd "$SCRIPT_DIR"
         echo "Checking dependencies"
+        check_dependencies
+        fetch_unihan
+        echo "Generating Unihan dictionary"
+        cargo run --release --bin unihan_jisyo -- \
+            data/Unihan_Readings.txt \
+            tmp.unihan
+        skkdic-sort < tmp.unihan | skkdic-expr2 > tmp.unihan.sorted
+        cat unicode-header.txt tmp.unihan.sorted > SKK-JISYO.unihan
         echo "Running MySQL"
         docker run --name wiktionary -d --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
         echo "Waiting MySQL"

@@ -1,5 +1,5 @@
-# 毎月 1 回、Wiktionary の最新ダンプと国土地理院の地名集から
-# 辞書を再生成してコミットする。
+# 毎月 1 回、Wiktionary の最新ダンプ、国土地理院の地名集、
+# Unicode の Unihan から辞書を再生成してコミットする。
 name: Monthly build
 
 on:
@@ -35,14 +35,14 @@ jobs:
       - name: Generate dictionaries
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends poppler-utils skktools
+          sudo apt-get install -y --no-install-recommends poppler-utils skktools unzip
           ./make.sh --gsi
           ./make.sh
 
       - name: Check for updates
         id: update
         run: |
-          git add SKK-JISYO.gsi SKK-JISYO.wiktionary SKK-JISYO.jion SKK-JISYO.ojp SKK-JISYO.shikakugoma
+          git add SKK-JISYO.gsi SKK-JISYO.wiktionary SKK-JISYO.jion SKK-JISYO.ojp SKK-JISYO.shikakugoma SKK-JISYO.unihan
           if git diff --cached --quiet; then
             echo "updated=false" >> "$GITHUB_OUTPUT"
           else
@@ -75,4 +75,5 @@ jobs:
             SKK-JISYO.jion
             SKK-JISYO.ojp
             SKK-JISYO.shikakugoma
+            SKK-JISYO.unihan
           retention-days: 30

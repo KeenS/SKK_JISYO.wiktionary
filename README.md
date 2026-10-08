@@ -1,5 +1,5 @@
-# SKKのWiktionary・地名辞書
-このリポジトリは日本語版Wiktionaryと国土地理院の地名データから生成したいくつかの辞書が含まれています。
+# SKKのWiktionary・地名・Unihan辞書
+このリポジトリは日本語版Wiktionary、国土地理院の地名データ、Unicode の Unihan から生成したいくつかの辞書が含まれています。
 
 * SKK-JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
 * SKK-JISYO.shikakugoma: 四角号碼の変換辞書です
@@ -7,12 +7,14 @@
 * SKK-JISYO.ojp: 古典日本語（歴史的仮名遣い）の変換辞書です
 * SKK-JISYO.gsi: 地名集日本から生成した地名の変換辞書です
 * SKK-JISYO.post: 日本郵便の郵便番号データから生成した住所の変換辞書です
+* SKK-JISYO.unihan: Unicodeに含まれる漢字の辞書です
 
 # ライセンス
 
 * Wiktionary由来の辞書はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)で提供されます。
 * `SKK-JISYO.gsi` は国土地理院のデータを加工して生成しており、公共データ利用規約（第1.0版）に基づき[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)互換の条件で提供されます。
 * `SKK-JISYO.post` は日本郵便の郵便番号データを加工して生成しており、日本郵便の利用規約に基づき提供されます。
+* `SKK-JISYO.unihan` は [Unicode License v3](https://www.unicode.org/license.txt) で提供されます。CC BY-SA ではありません。この辞書を単体でコピーする場合も、ファイルに入っている許諾表示を残して下さい。
 * その他のコード類はMITライセンスです。
 
 # 辞書について
@@ -156,6 +158,24 @@ SKK-JISYO.jionはSKKで[字音仮名遣い](https://ja.wikipedia.org/wiki/%E5%AD
 
 wiktionaryに載っている古音から生成しているので、原義の字音仮名遣いとはずれがあると思われます。
 
+## SKKのUnihan辞書
+### これは何？
+
+`SKK-JISYO.unihan` は Unicode に含まれる漢字の辞書です。音読みと訓読みがある字が入ります。見出しはひらがなの読み全体で、送り仮名の見出しはありません。読みが記録されていない字は入りません。
+
+Wiktionary に記事がない漢字も入ります。`硤` は `こう` と `ぎょう` に含まれ、`そ` にはありません。「こう」のようなありふれた音読みには、その読みの漢字がすべて並ぶので候補は長くなります。`.wiktionary` とはライセンスが異なるので再配布の際はご注意下さい。
+
+たとえば次のように変換できます。
+
+```text
+あかるい /明/
+ぎょう /硤/
+```
+
+### 使い方
+
+通常のSKK辞書として使えます。`SKK-JISYO.wiktionary` にない漢字を読みから変換するときの補助辞書です。ライセンスが異なるので、このファイルは別に登録して下さい。
+
 # 自分で生成する
 
 自分でデータを生成する人のために手順を示す。`make.sh` を使う方法と使わない方法がある。
@@ -169,6 +189,8 @@ Wiktionary、四角号碼、字音、古典日本語の各辞書を生成する�
 ``` console
 $ ./make.sh
 ```
+
+このコマンドは `SKK-JISYO.unihan` も生成します。
 
 既にダウンロードしてあるならデータを指定する。
 
@@ -321,6 +343,22 @@ $ head output.log
 $ rm tmp.shikakugoma tmp.jion ids.txt
 ```
 
+### Unihan辞書の生成
+
+[Unihan.zip](https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip) をダウンロードして `Unihan_Readings.txt` を取り出してから、次のコマンドで辞書を生成します。
+
+``` console
+$ wget -N https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip
+$ cargo run --release --bin unihan_jisyo -- Unihan_Readings.txt tmp.unihan
+$ skkdic-sort < tmp.unihan | skkdic-expr2 > tmp.unihan.sorted
+$ cat unicode-header.txt tmp.unihan.sorted > SKK-JISYO.unihan
+```
+
+``` console
+$ ls SKK-JISYO.unihan
+SKK-JISYO.unihan
+```
+
 ## 地名データのダウンロードとテキスト抽出
 [地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)のpdfデータをdata/にダウンロードしておく
 
@@ -385,7 +423,7 @@ $ rm tmp.post tmp.post.sorted
 
 # 自動更新
 
-GitHub Actions で毎月 1 回辞書を再生成しています。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
+GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan も取り直し、`SKK-JISYO.unihan` をコミットします。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
 
 # Future Work
 

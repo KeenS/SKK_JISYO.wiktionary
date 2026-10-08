@@ -10,6 +10,7 @@ pub mod candidate_order;
 pub mod gsi;
 pub mod jion;
 pub mod model;
+pub mod unihan;
 
 /// A syntax error from the article dump. The iterator yields this once and then ends.
 #[derive(Debug)]
