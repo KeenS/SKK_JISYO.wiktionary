@@ -1949,7 +1949,7 @@ pub fn to_entry(entry: &WiktionaryEntry) -> Entry {
     }
 }
 
-fn split_candidate(candidate: &str) -> (&str, &str) {
+pub(crate) fn split_candidate(candidate: &str) -> (&str, &str) {
     let boundary = candidate
         .char_indices()
         .rev()
@@ -1959,7 +1959,7 @@ fn split_candidate(candidate: &str) -> (&str, &str) {
     candidate.split_at(boundary)
 }
 
-fn okuri_romaji(ch: char) -> Option<char> {
+pub(crate) fn okuri_romaji(ch: char) -> Option<char> {
     Some(match ch {
         'あ' => 'a',
         'い' => 'i',

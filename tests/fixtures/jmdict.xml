@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE JMdict [
+<!ENTITY v1 "Ichidan verb">
+<!ENTITY v5k "Godan verb with ku ending">
+<!ENTITY v5u "Godan verb with u ending">
+<!ENTITY vk "Kuru verb - special class">
+<!ENTITY v5k-s "Godan verb - Iku/Yuku special class">
+<!ENTITY adj-i "adjective (keiyoushi)">
+<!ENTITY n "noun (common) (futsuumeishi)">
+<!ENTITY vs "noun or participle which takes the aux. verb suru">
+<!ENTITY vt "transitive verb">
+<!ENTITY mystery "something else">
+]>
+<JMdict>
+<entry>
+<k_ele><keb>食べる</keb></k_ele>
+<r_ele><reb>たべる</reb></r_ele>
+<sense>
+<pos>&v1;</pos>
+<pos>&vt;</pos>
+<gloss>to eat</gloss>
+<s_inf>usually written using kana alone</s_inf>
+</sense>
+</entry>
+<entry>
+<k_ele><keb>書く</keb></k_ele>
+<r_ele><reb>かく</reb></r_ele>
+<sense><pos>&v5k;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>来る</keb></k_ele>
+<r_ele><reb>くる</reb></r_ele>
+<sense><pos>&vk;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>会う</keb></k_ele>
+<r_ele><reb>あう</reb></r_ele>
+<sense><pos>&v5u;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>高い</keb></k_ele>
+<r_ele><reb>たかい</reb></r_ele>
+<sense><pos>&adj-i;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>行く</keb></k_ele>
+<r_ele><reb>いく</reb></r_ele>
+<sense><pos>&v5k-s;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>日本語</keb></k_ele>
+<r_ele><reb>にほんご</reb></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>勉強</keb></k_ele>
+<r_ele><reb>べんきょう</reb></r_ele>
+<sense><pos>&vs;</pos><pos>&vt;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>勉強する</keb></k_ele>
+<r_ele><reb>べんきょうする</reb></r_ele>
+<sense><pos>&vs;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>甲</keb></k_ele>
+<k_ele><keb>乙</keb></k_ele>
+<r_ele>
+<reb>こう</reb>
+<re_restr>甲</re_restr>
+</r_ele>
+<r_ele><reb>おつ</reb></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>普通</keb></k_ele>
+<k_ele><keb>優先</keb><ke_pri>spec1</ke_pri></k_ele>
+<r_ele><reb>じゅんばん</reb></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>片仮名</keb></k_ele>
+<r_ele><reb>カタカナ</reb></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>仮名</keb></k_ele>
+<r_ele><reb>かなだけ</reb><re_nokanji/></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>ひらがな</keb></k_ele>
+<r_ele><reb>ひらがな</reb></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>中黒</keb></k_ele>
+<r_ele><reb>なか・ぐろ</reb></r_ele>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>不明</keb></k_ele>
+<r_ele><reb>ふめい</reb></r_ele>
+<sense><pos>&mystery;</pos></sense>
+</entry>
+</JMdict>

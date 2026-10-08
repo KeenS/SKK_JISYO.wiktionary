@@ -10,6 +10,7 @@
 * SKK-JISYO.unihan: Unicodeに含まれる漢字の辞書です
 * SKK-JISYO.emoji: 絵文字、ギリシャ文字、記号の辞書です
 * SKK-JISYO.jmnedict: 人名、地名、駅、会社、組織、製品、作品の辞書です。GPL の SKK-JISYO.jinmei とは別の辞書です
+* SKK-JISYO.jmdict: 語彙の辞書です
 
 # ライセンス
 
@@ -17,7 +18,7 @@
 * `SKK-JISYO.gsi` は国土地理院のデータを加工して生成しており、公共データ利用規約（第1.0版）に基づき[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)互換の条件で提供されます。
 * `SKK-JISYO.post` は日本郵便の郵便番号データを加工して生成しており、日本郵便の利用規約に基づき提供されます。
 * `SKK-JISYO.unihan`、`SKK-JISYO.shikakugoma`、`SKK-JISYO.emoji` は [Unicode License v3](https://www.unicode.org/license.txt) で提供されます。CC BY-SA ではありません。これらの辞書を単体でコピーする場合も、ファイルに入っている許諾表示を残して下さい。
-* `SKK-JISYO.jmnedict` は James William Breen と Electronic Dictionary Research and Development Group の [JMnedict](https://www.edrdg.org/enamdict/enamdict_doc.html) を加工して生成しており、[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja) で提供されます。条件は [EDRDG のライセンス](https://www.edrdg.org/edrdg/licence.html) にあります。`自動更新` が元データを取り直します。Wiktionary の許諾表示とは別です。
+* `SKK-JISYO.jmnedict` と `SKK-JISYO.jmdict` は James William Breen と Electronic Dictionary Research and Development Group の [JMnedict](https://www.edrdg.org/enamdict/enamdict_doc.html) と [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project) を加工して生成しており、[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja) で提供されます。条件は [EDRDG のライセンス](https://www.edrdg.org/edrdg/licence.html) にあります。`自動更新` が元データを取り直します。Wiktionary の許諾表示とは別です。
 * その他のコード類はMITライセンスです。
 
 # 辞書について
@@ -228,6 +229,27 @@ ANC /ＡＮＣ;組織/
 
 人名、駅名、会社名、製品名を変換するときに使います。通常のSKK辞書として使えます。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
 
+## SKKの語彙辞書
+### これは何？
+
+`SKK-JISYO.jmdict` は一般的な語彙の辞書です。見出しは読み、候補は漢字の表記です。英語の語義は入っていません。
+
+```text
+たb /食/
+かk /書/
+あu /会/
+たかi /高/
+いk /行/
+にほんご /日本語/
+べんきょう /勉強/
+```
+
+送り仮名がある動詞と形容詞は、語幹とかなの子音を見出しにします。`行く` は `いk /行/`、`会う` は `あu /会/` です。`勉強` は `べんきょう /勉強/` です。同じ見出しでは、優先タグのある候補が先に並びます。
+
+### 使い方
+
+一般的な語を変換するときに、`SKK-JISYO.wiktionary` と並べて使います。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
+
 # 自分で生成する
 
 自分でデータを生成する人のために手順を示す。`make.sh` を使う方法と使わない方法がある。
@@ -242,7 +264,7 @@ Wiktionary、四角号碼、字音、古典日本語の各辞書を生成する�
 $ ./make.sh
 ```
 
-このコマンドは `SKK-JISYO.unihan`、`SKK-JISYO.shikakugoma`、`SKK-JISYO.emoji`、`SKK-JISYO.jmnedict` も生成します。EDRDG の JMnedict、JMdict_e、KANJIDIC2 もダウンロードします。
+このコマンドは `SKK-JISYO.unihan`、`SKK-JISYO.shikakugoma`、`SKK-JISYO.emoji`、`SKK-JISYO.jmnedict`、`SKK-JISYO.jmdict` も生成します。EDRDG の JMnedict、JMdict_e、KANJIDIC2 もダウンロードします。
 
 既にダウンロードしてあるならデータを指定する。
 
@@ -458,6 +480,21 @@ $ ls SKK-JISYO.jmnedict
 SKK-JISYO.jmnedict
 ```
 
+### 語彙辞書の生成
+
+`./make.sh` が `data/JMdict_e.gz` をダウンロードし、`data/JMdict_e.xml` を展開します。リポジトリのルートで辞書を生成します。
+
+``` console
+$ cargo run --release --bin jmdict_jisyo -- data/JMdict_e.xml tmp.jmdict
+$ skkdic-sort < tmp.jmdict | skkdic-expr2 > tmp.jmdict.sorted
+$ cat edrdg-header.txt tmp.jmdict.sorted > SKK-JISYO.jmdict
+```
+
+``` console
+$ ls SKK-JISYO.jmdict
+SKK-JISYO.jmdict
+```
+
 ## 地名データのダウンロードとテキスト抽出
 [地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)のpdfデータをdata/にダウンロードしておく
 
@@ -522,7 +559,7 @@ $ rm tmp.post tmp.post.sorted
 
 # 自動更新
 
-GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan、CLDR の注釈、JMnedict も取り直し、`SKK-JISYO.unihan`、`SKK-JISYO.emoji`、`SKK-JISYO.jmnedict` をコミットします。四角号碼辞書もその Unihan から作り直します。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
+GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan、CLDR の注釈、JMnedict、JMdict も取り直し、`SKK-JISYO.unihan`、`SKK-JISYO.emoji`、`SKK-JISYO.jmnedict`、`SKK-JISYO.jmdict` をコミットします。四角号碼辞書もその Unihan から作り直します。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
 
 # Future Work
 
