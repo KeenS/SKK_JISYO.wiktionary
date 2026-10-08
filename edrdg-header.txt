@@ -1,0 +1,13 @@
+; この辞書は James William Breen と Electronic Dictionary Research and Development Group（EDRDG）の JMnedict、JMdict_e、KANJIDIC2 を加工して生成されています
+; 見出しの表記と読み、種別のラベル（姓、名、人名、地名、駅、会社、組織、製品、作品）を収録しています
+; SKIP、四角号碼、諸橋、ピンイン、韓国語読み、De Roo 符号は含みません
+; 著作権は James William Breen および the Electronic Dictionary Research and Development Group にあります
+; CC BY-SA 4.0[^1] の下で提供されます。EDRDG のライセンス条件[^2]に従って下さい
+; [^1]: https://creativecommons.org/licenses/by-sa/4.0/deed.ja
+; [^2]: https://www.edrdg.org/edrdg/licence.html
+; JMdict[^3]、JMnedict[^4]、KANJIDIC[^5]
+; [^3]: https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project
+; [^4]: https://www.edrdg.org/enamdict/enamdict_doc.html
+; [^5]: https://www.edrdg.org/wiki/index.php/KANJIDIC_Project
+; make.sh が wget -N で元データを取り直し、毎月のワークフローがそのスクリプトを実行します
+; その実行が、EDRDG のライセンスが求める更新手順です

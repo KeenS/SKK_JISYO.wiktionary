@@ -10,6 +10,7 @@ pub mod candidate_order;
 pub mod emoji;
 pub mod gsi;
 pub mod jion;
+pub mod jmnedict;
 pub mod model;
 pub mod unihan;
 

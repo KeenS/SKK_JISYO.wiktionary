@@ -14,9 +14,10 @@ SYNOPSIS:
   $0 --gsi
 
 DESCRIPTION:
-  Generate dictionaries from Wiktionary. Also download Unihan and
-  CLDR annotations and write SKK-JISYO.unihan, SKK-JISYO.shikakugoma,
-  and SKK-JISYO.emoji. Give CATLINK as
+  Generate dictionaries from Wiktionary. Also download Unihan,
+  CLDR annotations, and the EDRDG files, and write SKK-JISYO.unihan,
+  SKK-JISYO.shikakugoma, SKK-JISYO.emoji, and SKK-JISYO.jmnedict.
+  Give CATLINK as
   jawiktionary-*-categorylinks.sql and ARTICLES as
   jawiktionary-*-pages-articles.xml. 
 
@@ -47,6 +48,7 @@ check_dependencies() {
     check_dependency docker
     check_dependency cargo
     check_dependency skkdic-sort
+    check_dependency gzip
 }
 
 fetch_unihan() {
@@ -88,6 +90,21 @@ fetch_emoji() {
         fetch_cldr_file annotationsDerived en.xml emoji-annotations-derived-en.xml
         wget -N https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
         wget -N https://www.unicode.org/Public/UCD/latest/ucd/NamesList.txt
+    )
+}
+
+# JMdict_e and KANJIDIC2 are fetched here with JMnedict. Their generators
+# are separate. gzip -dc keeps the .gz for wget -N on the next run.
+fetch_edrdg() {
+    (
+        cd "$SCRIPT_DIR/data"
+        echo "Fetching EDRDG"
+        wget -N http://ftp.edrdg.org/pub/Nihongo/JMnedict.xml.gz
+        wget -N http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz
+        wget -N http://ftp.edrdg.org/pub/Nihongo/kanjidic2.xml.gz
+        gzip -dc JMnedict.xml.gz > JMnedict.xml
+        gzip -dc JMdict_e.gz > JMdict_e.xml
+        gzip -dc kanjidic2.xml.gz > kanjidic2.xml
     )
 }
 
@@ -197,6 +214,13 @@ generate() {
             tmp.emoji
         skkdic-sort < tmp.emoji | skkdic-expr2 > tmp.emoji.sorted
         cat unicode-header.txt tmp.emoji.sorted > SKK-JISYO.emoji
+        fetch_edrdg
+        echo "Generating JMnedict dictionary"
+        cargo run --release --bin jmnedict_jisyo -- \
+            data/JMnedict.xml \
+            tmp.jmnedict
+        skkdic-sort < tmp.jmnedict | skkdic-expr2 > tmp.jmnedict.sorted
+        cat edrdg-header.txt tmp.jmnedict.sorted > SKK-JISYO.jmnedict
         echo "Running MySQL"
         docker run --name wiktionary -d --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
         echo "Waiting MySQL"

@@ -1,5 +1,5 @@
 # 毎月 1 回、Wiktionary の最新ダンプ、国土地理院の地名集、
-# Unicode の Unihan と CLDR の注釈から辞書を再生成してコミットする。
+# Unicode の Unihan と CLDR の注釈、EDRDG の JMnedict から辞書を再生成してコミットする。
 name: Monthly build
 
 on:
@@ -42,7 +42,7 @@ jobs:
       - name: Check for updates
         id: update
         run: |
-          git add SKK-JISYO.gsi SKK-JISYO.wiktionary SKK-JISYO.jion SKK-JISYO.ojp SKK-JISYO.shikakugoma SKK-JISYO.unihan SKK-JISYO.emoji
+          git add SKK-JISYO.gsi SKK-JISYO.wiktionary SKK-JISYO.jion SKK-JISYO.ojp SKK-JISYO.shikakugoma SKK-JISYO.unihan SKK-JISYO.emoji SKK-JISYO.jmnedict
           if git diff --cached --quiet; then
             echo "updated=false" >> "$GITHUB_OUTPUT"
           else
@@ -77,4 +77,5 @@ jobs:
             SKK-JISYO.shikakugoma
             SKK-JISYO.unihan
             SKK-JISYO.emoji
+            SKK-JISYO.jmnedict
           retention-days: 30
