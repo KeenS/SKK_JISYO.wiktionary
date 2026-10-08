@@ -27,12 +27,12 @@
 ### これは何？
 
 SKK-JISYO.wiktionaryは日本語版Wiktionaryのページから生成した現代仮名遣いのSKK辞書です。ベースとなる辞書を目指しています。
-SKK-JISYO.Lとの違いは以下の通りです。`SKK-JISYO.general` は「1つの辞書にまとめる」の普段の変換用です。
+SKK-JISYO.Lとの違いは以下の通りです。`SKK-JISYO.general` は「1つの辞書にまとめる」の普段の変換用、`SKK-JISYO.all` はこのリポジトリの辞書をすべて入れたものです。
 
-|            | .L     | .wiktionary  | .jmdict      | .general     |
-|------------|--------|--------------|--------------|--------------|
-| ライセンス | GPL    | CC BY-SA 4.0 | CC BY-SA 4.0 | 各辞書の許諾 |
-| エントリ数 | 約18万 | 約6.6万      | 約16万       | 約51万       |
+|            | .L     | .wiktionary  | .jmdict      | .general     | .all         |
+|------------|--------|--------------|--------------|--------------|--------------|
+| ライセンス | GPL    | CC BY-SA 4.0 | CC BY-SA 4.0 | 各辞書の許諾 | 各辞書の許諾 |
+| エントリ数 | 約18万 | 約6.9万      | 約16万       | 約65万       | 約67万       |
 
 ### 使い方
 
@@ -295,7 +295,7 @@ $ skkdic-expr2 \
     > SKK-JISYO.all
 ```
 
-普段の変換には、現代の語彙、固有名詞、地名、漢字の読み、絵文字をまとめます。
+普段の変換には、現代の語彙、固有名詞、地名、住所、漢字の読み、絵文字をまとめます。
 
 ``` console
 $ skkdic-expr2 \
@@ -303,6 +303,7 @@ $ skkdic-expr2 \
     + SKK-JISYO.jmdict \
     + SKK-JISYO.jmnedict \
     + SKK-JISYO.gsi \
+    + SKK-JISYO.post \
     + SKK-JISYO.kanjidic \
     + SKK-JISYO.unihan \
     + SKK-JISYO.emoji \
