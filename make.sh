@@ -16,8 +16,8 @@ SYNOPSIS:
 DESCRIPTION:
   Generate dictionaries from Wiktionary. Also download Unihan,
   CLDR annotations, and the EDRDG files, and write SKK-JISYO.unihan,
-  SKK-JISYO.shikakugoma, SKK-JISYO.emoji, SKK-JISYO.jmnedict, and
-  SKK-JISYO.jmdict.
+  SKK-JISYO.shikakugoma, SKK-JISYO.emoji, SKK-JISYO.jmnedict,
+  SKK-JISYO.jmdict, and SKK-JISYO.kanjidic.
   Give CATLINK as
   jawiktionary-*-categorylinks.sql and ARTICLES as
   jawiktionary-*-pages-articles.xml. 
@@ -228,6 +228,12 @@ generate() {
             tmp.jmdict
         skkdic-sort < tmp.jmdict | skkdic-expr2 > tmp.jmdict.sorted
         cat edrdg-header.txt tmp.jmdict.sorted > SKK-JISYO.jmdict
+        echo "Generating KANJIDIC dictionary"
+        cargo run --release --bin kanjidic_jisyo -- \
+            data/kanjidic2.xml \
+            tmp.kanjidic
+        skkdic-sort < tmp.kanjidic | skkdic-expr2 > tmp.kanjidic.sorted
+        cat edrdg-header.txt tmp.kanjidic.sorted > SKK-JISYO.kanjidic
         echo "Running MySQL"
         docker run --name wiktionary -d --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
         echo "Waiting MySQL"

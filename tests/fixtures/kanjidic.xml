@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kanjidic2>
+<character>
+<literal>硤</literal>
+<misc><grade>1</grade></misc>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_on">コウ</reading>
+<reading r_type="ja_on">ギョウ</reading>
+<reading r_type="pinyin">xia2</reading>
+<meaning>gorge</meaning>
+</rmgroup>
+</reading_meaning>
+<query_code>
+<q_code qc_type="skip">1-4-5</q_code>
+<q_code qc_type="four_corner">1463.8</q_code>
+</query_code>
+</character>
+<character>
+<literal>食</literal>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_kun">た.べる</reading>
+</rmgroup>
+</reading_meaning>
+</character>
+<character>
+<literal>一</literal>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_kun">ひと</reading>
+<reading r_type="ja_kun">ひと.つ</reading>
+</rmgroup>
+<nanori>はじめ</nanori>
+<nanori>かず</nanori>
+</reading_meaning>
+</character>
+<character>
+<literal>甲</literal>
+<reading_meaning>
+<rmgroup>
+<reading r_type="ja_on">コウ</reading>
+<reading r_type="ja_kun">.かぶと</reading>
+<reading r_type="ja_kun">うわ-</reading>
+</rmgroup>
+<nanori>こう.え</nanori>
+</reading_meaning>
+</character>
+</kanjidic2>

@@ -12,6 +12,7 @@ pub mod gsi;
 pub mod jion;
 pub mod jmdict;
 pub mod jmnedict;
+pub mod kanjidic;
 pub mod model;
 pub mod unihan;
 
