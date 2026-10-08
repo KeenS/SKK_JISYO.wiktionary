@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ldml>
+  <annotations>
+    <annotation cp="😀">スマイル | にっこり | にっこり笑う | 笑顔</annotation>
+    <annotation cp="😀" type="tts">にっこり笑う</annotation>
+    <annotation cp="🙂">スマイル</annotation>
+    <annotation cp="🙂" type="tts">微笑む</annotation>
+    <annotation cp="👍">OK | いいね | サムズアップ</annotation>
+    <annotation cp="👍" type="tts">サムズアップ</annotation>
+    <annotation cp="❤">赤いハート | ハート</annotation>
+    <annotation cp="❤" type="tts">赤いハート</annotation>
+    <annotation cp="{">カッコ | ブレース</annotation>
+    <annotation cp="{" type="tts">開き波括弧</annotation>
+    <annotation cp="-">マイナス</annotation>
+    <annotation cp="-" type="tts">ハイフンマイナス</annotation>
+    <annotation cp="!">びっくりマーク</annotation>
+    <annotation cp="!" type="tts">感嘆符</annotation>
+    <annotation cp="∞">インフィニティ | 無限大記号</annotation>
+    <annotation cp="∞" type="tts">無限大記号</annotation>
+    <annotation cp="€">EUR | ユーロ | 通貨</annotation>
+    <annotation cp="€" type="tts">ユーロ</annotation>
+    <annotation cp="©">コピーライト | 著作権</annotation>
+    <annotation cp="©" type="tts">著作権マーク</annotation>
+    <annotation cp="™">トレードマーク | 商標</annotation>
+    <annotation cp="™" type="tts">商標マーク</annotation>
+    <annotation cp="‸">キャレット</annotation>
+    <annotation cp="‸" type="tts">キャレット</annotation>
+    <annotation cp="→">右向矢印</annotation>
+    <annotation cp="→" type="tts">右向矢印</annotation>
+    <annotation cp="♪">八分音符</annotation>
+    <annotation cp="♪" type="tts">八分音符</annotation>
+    <annotation cp="※">米印</annotation>
+    <annotation cp="※" type="tts">米印</annotation>
+  </annotations>
+</ldml>

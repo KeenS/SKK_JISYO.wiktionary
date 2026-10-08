@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ldml>
+  <annotations>
+    <annotation cp="🇯🇵">旗 | 旗: 日本</annotation>
+    <annotation cp="🇯🇵" type="tts">旗: 日本</annotation>
+    <annotation cp="👍🏻">いいね</annotation>
+    <annotation cp="👍🏻" type="tts">いいね</annotation>
+  </annotations>
+</ldml>

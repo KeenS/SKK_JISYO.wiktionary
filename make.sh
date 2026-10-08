@@ -15,7 +15,8 @@ SYNOPSIS:
 
 DESCRIPTION:
   Generate dictionaries from Wiktionary. Also download Unihan and
-  write SKK-JISYO.unihan and SKK-JISYO.shikakugoma. Give CATLINK as
+  CLDR annotations and write SKK-JISYO.unihan, SKK-JISYO.shikakugoma,
+  and SKK-JISYO.emoji. Give CATLINK as
   jawiktionary-*-categorylinks.sql and ARTICLES as
   jawiktionary-*-pages-articles.xml. 
 
@@ -54,6 +55,39 @@ fetch_unihan() {
         echo "Fetching Unihan"
         wget -N https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip
         unzip -qo -j Unihan.zip Unihan_Readings.txt Unihan_DictionaryLikeData.txt
+    )
+}
+
+# Latest final CLDR tag. main and a beta tag would move under a monthly build.
+CLDR_TAG=release-48-2
+
+# wget -N compares the local file with the remote basename. -O skips that
+# check, so save ja.xml under its own name, then copy it aside. annotations
+# and annotationsDerived both ship ja.xml and en.xml.
+fetch_cldr_file() {
+    kind=$1
+    name=$2
+    dest=$3
+    dir="cldr-${kind}"
+    mkdir -p "$dir"
+    (
+        cd "$dir"
+        wget -N "https://raw.githubusercontent.com/unicode-org/cldr/${CLDR_TAG}/common/${kind}/${name}"
+    )
+    cp "$dir/$name" "$dest"
+}
+
+fetch_emoji() {
+    (
+        cd "$SCRIPT_DIR/data"
+        echo "Fetching emoji and symbols"
+        wget -N https://www.unicode.org/Public/emoji/latest/emoji-test.txt
+        fetch_cldr_file annotations ja.xml emoji-annotations-ja.xml
+        fetch_cldr_file annotations en.xml emoji-annotations-en.xml
+        fetch_cldr_file annotationsDerived ja.xml emoji-annotations-derived-ja.xml
+        fetch_cldr_file annotationsDerived en.xml emoji-annotations-derived-en.xml
+        wget -N https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
+        wget -N https://www.unicode.org/Public/UCD/latest/ucd/NamesList.txt
     )
 }
 
@@ -150,6 +184,19 @@ generate() {
             tmp.shikakugoma
         skkdic-sort < tmp.shikakugoma | skkdic-expr2 > tmp.shikakugoma.sorted
         cat unicode-header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
+        fetch_emoji
+        echo "Generating emoji dictionary"
+        cargo run --release --bin emoji_jisyo -- \
+            data/emoji-test.txt \
+            data/emoji-annotations-ja.xml \
+            data/emoji-annotations-en.xml \
+            data/emoji-annotations-derived-ja.xml \
+            data/emoji-annotations-derived-en.xml \
+            data/UnicodeData.txt \
+            data/NamesList.txt \
+            tmp.emoji
+        skkdic-sort < tmp.emoji | skkdic-expr2 > tmp.emoji.sorted
+        cat unicode-header.txt tmp.emoji.sorted > SKK-JISYO.emoji
         echo "Running MySQL"
         docker run --name wiktionary -d --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
         echo "Waiting MySQL"

@@ -1,5 +1,5 @@
-# SKKのWiktionary・地名・Unihan辞書
-このリポジトリは日本語版Wiktionary、国土地理院の地名データ、Unicode の Unihan から生成したいくつかの辞書が含まれています。
+# SKKのWiktionary・地名・Unihan・CLDR辞書
+このリポジトリは日本語版Wiktionary、国土地理院の地名データ、Unicode の Unihan、CLDR の注釈から生成したいくつかの辞書が含まれています。
 
 * SKK-JISYO.wiktionary: Wiktionaryをソースにした変換辞書です
 * SKK-JISYO.shikakugoma: 四角号碼の変換辞書です
@@ -8,13 +8,14 @@
 * SKK-JISYO.gsi: 地名集日本から生成した地名の変換辞書です
 * SKK-JISYO.post: 日本郵便の郵便番号データから生成した住所の変換辞書です
 * SKK-JISYO.unihan: Unicodeに含まれる漢字の辞書です
+* SKK-JISYO.emoji: 絵文字、ギリシャ文字、記号の辞書です
 
 # ライセンス
 
 * `SKK-JISYO.wiktionary`、`SKK-JISYO.jion`、`SKK-JISYO.ojp` はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)で提供されます。
 * `SKK-JISYO.gsi` は国土地理院のデータを加工して生成しており、公共データ利用規約（第1.0版）に基づき[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)互換の条件で提供されます。
 * `SKK-JISYO.post` は日本郵便の郵便番号データを加工して生成しており、日本郵便の利用規約に基づき提供されます。
-* `SKK-JISYO.unihan` と `SKK-JISYO.shikakugoma` は [Unicode License v3](https://www.unicode.org/license.txt) で提供されます。CC BY-SA ではありません。これらの辞書を単体でコピーする場合も、ファイルに入っている許諾表示を残して下さい。
+* `SKK-JISYO.unihan`、`SKK-JISYO.shikakugoma`、`SKK-JISYO.emoji` は [Unicode License v3](https://www.unicode.org/license.txt) で提供されます。CC BY-SA ではありません。これらの辞書を単体でコピーする場合も、ファイルに入っている許諾表示を残して下さい。
 * その他のコード類はMITライセンスです。
 
 # 辞書について
@@ -176,6 +177,38 @@ Wiktionary に記事がない漢字も入ります。`硤` は `こう` と `ぎ
 
 通常のSKK辞書として使えます。`SKK-JISYO.wiktionary` にない漢字を読みから変換するときの補助辞書です。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
 
+## SKKの絵文字辞書
+### これは何？
+
+`SKK-JISYO.emoji` は絵文字、現代ギリシャ文字、かなで書ける記号の辞書です。絵文字の見出しはかなの語と、英語の読み上げ名をつないだアルファベットです。ギリシャ文字の見出しは文字名です。`kappa` は `κ`、`Kappa` は `Κ`、`lamda` と `lambda` は `λ`、`sigma` は `σ` と `ς` です。記号では `いんふぃにてぃ` が `∞`、`ゆーろ` が `€` です。
+
+`にっこり` と `grinningface` は `😀`、`はーと` と `redheart` は `❤️`、`flagjapan` は `🇯🇵` です。候補に U+FE0F が入ることがあります。古い SKK では、U+FE0F や ZWJ を含む候補を 1 文字として確定できないことがあります。
+
+次の見出しはありません。
+
+* 漢字を含む注釈（`にっこり笑う`、`赤いハート`、`にほん`、`はた`）
+* 英語のキーワード（`face`）
+* 漢字だけの記号名（`→`、`※`）
+* キーボードで直接打てる文字（`!`、`-`）
+* ギリシャ文字のかな見出し（`かっぱ`）
+
+`.wiktionary` とはライセンスが異なるので再配布の際はご注意下さい。
+
+たとえば次のように変換できます。
+
+```text
+にっこり /😀/
+はーと /❤️/
+grinningface /😀/
+kappa /κ/
+いんふぃにてぃ /∞/
+ゆーろ /€/
+```
+
+### 使い方
+
+絵文字を日本語の語やアルファベットの名前から、ギリシャ文字を文字名から、記号をかなの外来語から入力するときに使います。通常のSKK辞書として使えます。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
+
 # 自分で生成する
 
 自分でデータを生成する人のために手順を示す。`make.sh` を使う方法と使わない方法がある。
@@ -190,7 +223,7 @@ Wiktionary、四角号碼、字音、古典日本語の各辞書を生成する�
 $ ./make.sh
 ```
 
-このコマンドは `SKK-JISYO.unihan` と `SKK-JISYO.shikakugoma` も生成します。
+このコマンドは `SKK-JISYO.unihan`、`SKK-JISYO.shikakugoma`、`SKK-JISYO.emoji` も生成します。
 
 既にダウンロードしてあるならデータを指定する。
 
@@ -368,6 +401,29 @@ $ ls SKK-JISYO.unihan
 SKK-JISYO.unihan
 ```
 
+### 絵文字辞書の生成
+
+`./make.sh` が次のファイルを `data/` に置きます。リポジトリのルートで辞書を生成します。
+
+``` console
+$ cargo run --release --bin emoji_jisyo -- \
+    data/emoji-test.txt \
+    data/emoji-annotations-ja.xml \
+    data/emoji-annotations-en.xml \
+    data/emoji-annotations-derived-ja.xml \
+    data/emoji-annotations-derived-en.xml \
+    data/UnicodeData.txt \
+    data/NamesList.txt \
+    tmp.emoji
+$ skkdic-sort < tmp.emoji | skkdic-expr2 > tmp.emoji.sorted
+$ cat unicode-header.txt tmp.emoji.sorted > SKK-JISYO.emoji
+```
+
+``` console
+$ ls SKK-JISYO.emoji
+SKK-JISYO.emoji
+```
+
 ## 地名データのダウンロードとテキスト抽出
 [地名集日本](https://www.gsi.go.jp/kihonjohochousa/gazetteer.html)のpdfデータをdata/にダウンロードしておく
 
@@ -432,7 +488,7 @@ $ rm tmp.post tmp.post.sorted
 
 # 自動更新
 
-GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan も取り直し、`SKK-JISYO.unihan` をコミットします。四角号碼辞書もその Unihan から作り直します。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
+GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan と CLDR の注釈も取り直し、`SKK-JISYO.unihan` と `SKK-JISYO.emoji` をコミットします。四角号碼辞書もその Unihan から作り直します。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
 
 # Future Work
 

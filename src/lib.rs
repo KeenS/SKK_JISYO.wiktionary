@@ -7,6 +7,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 pub mod candidate_order;
+pub mod emoji;
 pub mod gsi;
 pub mod jion;
 pub mod model;

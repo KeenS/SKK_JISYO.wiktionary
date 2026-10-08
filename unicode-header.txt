@@ -1,4 +1,4 @@
-; この辞書は Unicode の公開データ（Unihan と CLDR アノテーション）を加工して生成されています。値は公開されているものです。
+; この辞書は Unicode の公開データ（Unihan、CLDR アノテーション、UnicodeData.txt、NamesList.txt）を加工して生成されています。値は公開されているものです。
 ;
 ; UNICODE LICENSE V3
 ;

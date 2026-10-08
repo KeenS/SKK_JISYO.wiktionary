@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ldml>
+  <annotations>
+    <annotation cp="🇯🇵" type="tts">flag: Japan</annotation>
+    <annotation cp="👍🏻" type="tts">thumbs up: light skin tone</annotation>
+    <annotation cp="👨‍👩‍👧" type="tts">family: man, woman, girl</annotation>
+  </annotations>
+</ldml>

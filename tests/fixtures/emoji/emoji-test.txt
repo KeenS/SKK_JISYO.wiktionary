@@ -1,0 +1,12 @@
+# subgroup: face
+1F600 ; fully-qualified     # 😀 E1.0 grinning face
+1F642 ; fully-qualified     # 🙂 E1.0 slightly smiling face
+# subgroup: hand
+1F44D ; fully-qualified     # 👍 E0.6 thumbs up
+1F44D 1F3FB ; fully-qualified # 👍🏻 E1.0 thumbs up: light skin tone
+2764 FE0F ; fully-qualified # ❤️ E0.6 red heart
+1F600 ; unqualified         # ignored
+# subgroup: family
+1F468 200D 1F469 200D 1F467 ; fully-qualified # 👨‍👩‍👧 E2.0 family
+# subgroup: country-flag
+1F1EF 1F1F5 ; fully-qualified # 🇯🇵 E0.6 flag: Japan

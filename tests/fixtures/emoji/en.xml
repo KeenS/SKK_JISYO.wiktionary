@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ldml>
+  <annotations>
+    <annotation cp="😀">face | grin</annotation>
+    <annotation cp="😀" type="tts">grinning face</annotation>
+    <annotation cp="🙂" type="tts">slightly smiling face</annotation>
+    <annotation cp="👍" type="tts">thumbs up</annotation>
+    <annotation cp="❤" type="tts">red heart</annotation>
+    <annotation cp="∞" type="tts">infinity</annotation>
+    <annotation cp="👨‍👩‍👧" type="tts">family: man, woman, girl</annotation>
+  </annotations>
+</ldml>
