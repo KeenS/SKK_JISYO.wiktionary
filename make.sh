@@ -15,7 +15,7 @@ SYNOPSIS:
 
 DESCRIPTION:
   Generate dictionaries from Wiktionary. Also download Unihan and
-  write SKK-JISYO.unihan. Give CATLINK as
+  write SKK-JISYO.unihan and SKK-JISYO.shikakugoma. Give CATLINK as
   jawiktionary-*-categorylinks.sql and ARTICLES as
   jawiktionary-*-pages-articles.xml. 
 
@@ -144,6 +144,12 @@ generate() {
             tmp.unihan
         skkdic-sort < tmp.unihan | skkdic-expr2 > tmp.unihan.sorted
         cat unicode-header.txt tmp.unihan.sorted > SKK-JISYO.unihan
+        echo "Generating four-corner dictionary"
+        cargo run --release --bin shikakugoma -- \
+            data/Unihan_DictionaryLikeData.txt \
+            tmp.shikakugoma
+        skkdic-sort < tmp.shikakugoma | skkdic-expr2 > tmp.shikakugoma.sorted
+        cat unicode-header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
         echo "Running MySQL"
         docker run --name wiktionary -d --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=true  -e MYSQL_DATABASE=wiktionary mysql
         echo "Waiting MySQL"
@@ -165,7 +171,6 @@ generate() {
         echo "Stopping MySQL"
         docker stop wiktionary
         echo "Generating prototype of dictionaries"
-        cargo run --release --bin shikakugoma ids.txt "$ARTICLES" > output_shikakugoma.log
         cargo run --release --bin jion ids.txt "$ARTICLES" > output_jion.log
         echo "Generating Wiktionary dictionary"
         cargo run --release --bin wiktionary_jisyo -- \
@@ -176,9 +181,6 @@ generate() {
             --ojp-output tmp.ojp \
             --report wiktionary-jisyo-report.tsv
         echo "Generating dictionaries"
-        cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 > tmp.shikakugoma.sorted
-        cat header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
-
         cat tmp.wiktionary | skkdic-sort | skkdic-expr2 > tmp.wiktionary.sorted
         cat header.txt tmp.wiktionary.sorted > tmp.wiktionary.headered
         sort_candidates tmp.wiktionary.headered SKK-JISYO.wiktionary

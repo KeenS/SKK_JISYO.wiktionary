@@ -11,10 +11,10 @@
 
 # ライセンス
 
-* Wiktionary由来の辞書はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)で提供されます。
+* `SKK-JISYO.wiktionary`、`SKK-JISYO.jion`、`SKK-JISYO.ojp` はWiktionaryのライセンスに従い[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)で提供されます。
 * `SKK-JISYO.gsi` は国土地理院のデータを加工して生成しており、公共データ利用規約（第1.0版）に基づき[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)互換の条件で提供されます。
 * `SKK-JISYO.post` は日本郵便の郵便番号データを加工して生成しており、日本郵便の利用規約に基づき提供されます。
-* `SKK-JISYO.unihan` は [Unicode License v3](https://www.unicode.org/license.txt) で提供されます。CC BY-SA ではありません。この辞書を単体でコピーする場合も、ファイルに入っている許諾表示を残して下さい。
+* `SKK-JISYO.unihan` と `SKK-JISYO.shikakugoma` は [Unicode License v3](https://www.unicode.org/license.txt) で提供されます。CC BY-SA ではありません。これらの辞書を単体でコピーする場合も、ファイルに入っている許諾表示を残して下さい。
 * その他のコード類はMITライセンスです。
 
 # 辞書について
@@ -76,7 +76,9 @@ SKK-JISYO.Lとの違いは以下の通りです。
 ## SKKの四角号碼辞書
 ### これは何？
 
-SKK-JISYO.shikakugomaはSKKで使える[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)辞書です。[Wiktionaryの漢字の記事](https://ja.wiktionary.org/wiki/カテゴリ:漢字https://ja.wiktionary.org/wiki/カテゴリ:漢字)から生成しています。
+`SKK-JISYO.shikakugoma` は[四角号碼](https://ja.wikipedia.org/wiki/四角号碼)で漢字に変換する辞書です。漢字の形から決まる4桁の番号と、附画を加えた5桁の番号が入っています。
+
+`碼` は `1162` と `11627`、`酊` は `1162` と `11620`、`硤` は `1463` と `14638` です。`𠮟` は入っていません。`.wiktionary` とはライセンスが異なるので再配布の際はご注意下さい。
 
 ### 四角号碼入力について
 
@@ -106,9 +108,7 @@ SKK-JISYO.shikakugomaはSKKで使える[四角号碼](https://ja.wikipedia.org/w
 
 ## 使い方
 
-通常のSKK辞書として使えます。数字からの変換は「Q」から変換できます（SKKエンジンによって異なるかもしれません）。
-
-1つの辞書しか扱えないSKKエンジンを使っている場合は[skkdic-expr2](http://openlab.ring.gr.jp/skk/wiki/wiki.cgi?page=%BC%AD%BD%F1%A5%E1%A5%F3%A5%C6%A5%CA%A5%F3%A5%B9%A5%C4%A1%BC%A5%EB)などで1つにまとめて下さい。
+通常のSKK辞書として使えます。数字からの変換は「Q」から変換できます（SKKエンジンによって異なるかもしれません）。読みが分からない漢字を形から出すときに使います。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
 
 ## SKKの古典日本語辞書
 
@@ -174,7 +174,7 @@ Wiktionary に記事がない漢字も入ります。`硤` は `こう` と `ぎ
 
 ### 使い方
 
-通常のSKK辞書として使えます。`SKK-JISYO.wiktionary` にない漢字を読みから変換するときの補助辞書です。ライセンスが異なるので、このファイルは別に登録して下さい。
+通常のSKK辞書として使えます。`SKK-JISYO.wiktionary` にない漢字を読みから変換するときの補助辞書です。複数辞書をサポートしていない場合は `skkdic-expr2` などのツールを用いて SKK-JISYO.wiktionaryと合併して利用下さい。
 
 # 自分で生成する
 
@@ -190,7 +190,7 @@ Wiktionary、四角号碼、字音、古典日本語の各辞書を生成する�
 $ ./make.sh
 ```
 
-このコマンドは `SKK-JISYO.unihan` も生成します。
+このコマンドは `SKK-JISYO.unihan` と `SKK-JISYO.shikakugoma` も生成します。
 
 既にダウンロードしてあるならデータを指定する。
 
@@ -262,13 +262,10 @@ $ docker stop wiktionary
 
 ## Wiktionary系辞書の生成
 
-四角号碼と字音のデータを生成する
-
+字音のデータを生成する
 
 ```console
-# 四角号碼辞書と漢字読み対応表
-$ cargo run --release --bin shikakugoma ids.txt jawiktionary-*-pages-articles.xml > output.log
-$ cargo run --release --bin jion ids.txt jawiktionary-*-pages-articles.xml >> output.log
+$ cargo run --release --bin jion ids.txt jawiktionary-*-pages-articles.xml > output.log
 ```
 
 辞書や対応表などを生成する
@@ -299,9 +296,6 @@ $ cargo run --release --bin sort_candidates -- \
      --xml jawiktionary-*-pages-articles.xml \
      --input tmp.ojp.headered \
      --output SKK-JISYO.ojp
-# 四角号碼辞書
-$ cat tmp.shikakugoma | skkdic-sort | skkdic-expr2 > tmp.shikakugoma.sorted
-$ cat header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
 # 字音
 cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 > tmp.jion.sorted
 cat header.txt tmp.jion.sorted > tmp.jion.headered
@@ -317,7 +311,7 @@ cargo run --release --bin sort_candidates -- \
 
 ```console
 $ ls SKK-JISYO.*
-SKK-JISYO.wiktionary  SKK-JISYO.jion  SKK-JISYO.shikakugoma
+SKK-JISYO.wiktionary  SKK-JISYO.jion
 ```
 
 wikitionaryに適切な情報が載ってないものもあるので `output.log` にはそれらの情報が出力されている。
@@ -340,7 +334,22 @@ $ head output.log
 
 
 ``` console
-$ rm tmp.shikakugoma tmp.jion ids.txt
+$ rm tmp.jion ids.txt
+```
+
+### 四角号碼辞書の生成
+
+`Unihan_DictionaryLikeData.txt` は `./make.sh` が `Unihan.zip` から取り出します。次のコマンドで辞書を生成します。
+
+``` console
+$ cargo run --release --bin shikakugoma -- Unihan_DictionaryLikeData.txt tmp.shikakugoma
+$ skkdic-sort < tmp.shikakugoma | skkdic-expr2 > tmp.shikakugoma.sorted
+$ cat unicode-header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
+```
+
+``` console
+$ ls SKK-JISYO.shikakugoma
+SKK-JISYO.shikakugoma
 ```
 
 ### Unihan辞書の生成
@@ -423,7 +432,7 @@ $ rm tmp.post tmp.post.sorted
 
 # 自動更新
 
-GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan も取り直し、`SKK-JISYO.unihan` をコミットします。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
+GitHub Actions で毎月 1 回辞書を再生成しています。同じ実行で Unihan も取り直し、`SKK-JISYO.unihan` をコミットします。四角号碼辞書もその Unihan から作り直します。ワークフローは [.github/workflows/monthly-build.yml](.github/workflows/monthly-build.yml) です。
 
 # Future Work
 

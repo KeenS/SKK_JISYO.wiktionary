@@ -1,0 +1,7 @@
+# Four-corner fixture. kJapanese is not a code.
+U+7864	kFourCornerCode	1463.8
+U+78BC	kFourCornerCode	1162.7
+U+914A	kFourCornerCode	1162.0
+U+4E00	kFourCornerCode	8020.0 8020.7
+U+4E8C	kFourCornerCode	1234
+U+4E09	kJapanese	サン
