@@ -1,6 +1,8 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::jion::on_reading::katakana_to_hiragana;
+
 use super::jisyo::Jisyo;
 
 static ROW_REGEX: Lazy<Regex> = Lazy::new(|| {
@@ -18,13 +20,13 @@ pub fn generate_jisyo(pdf_text: &str) -> Jisyo {
         let Some(kanji) = fallback_kanji(&row) else {
             continue;
         };
-        let official_kana = strip_parenthetical(&row.kana);
+        let official_kana = katakana_to_hiragana(strip_parenthetical(&row.kana));
         let official_romanized = strip_parenthetical(&row.romanized);
         for reading in official_and_alternate_readings(&row.kana) {
             jisyo.add_entry(&reading, kanji.clone());
 
             if row.classification == "Municipality" {
-                if let Some(base) = base_entry(&kanji, official_kana, official_romanized) {
+                if let Some(base) = base_entry(&kanji, &official_kana, official_romanized) {
                     if let Some(base_reading) = reading.strip_suffix(base.kana_suffix) {
                         if !base_reading.is_empty() {
                             jisyo.add_entry(base_reading, base.candidate);
@@ -50,12 +52,12 @@ fn fallback_kanji(row: &Row) -> Option<String> {
 }
 
 fn official_and_alternate_readings(kana: &str) -> Vec<String> {
-    let mut readings = vec![strip_alternates(kana).to_string()];
+    let mut readings = vec![katakana_to_hiragana(strip_alternates(kana))];
     if let Some((_, alternates)) = kana.split_once('（') {
         for alternate in alternates.trim_end_matches('）').split('，') {
-            let alternate = alternate.trim();
+            let alternate = katakana_to_hiragana(alternate.trim());
             if !alternate.is_empty() {
-                readings.push(alternate.to_string());
+                readings.push(alternate);
             }
         }
     }
