@@ -42,6 +42,7 @@ pub struct Inputs<'a> {
     pub en_derived: &'a Path,
     pub unicode_data: &'a Path,
     pub names_list: &'a Path,
+    pub readings: &'a [&'a Path],
 }
 
 pub struct Sources<'a> {
@@ -52,6 +53,9 @@ pub struct Sources<'a> {
     pub en_derived: &'a str,
     pub unicode_data: &'a str,
     pub names_list: &'a str,
+    /// Okuri-nasi SKK text, usually `SKK-JISYO.wiktionary` and `SKK-JISYO.jmdict`.
+    /// Kanji symbol names take their readings from this text.
+    pub readings: &'a str,
 }
 
 /// Okuri-nasi lines for emoji, modern Greek letters, and kana-named symbols.
@@ -64,6 +68,7 @@ pub fn parse(sources: &Sources<'_>) -> Result<BTreeMap<String, Vec<String>>, Par
     // Derived Japanese names are not midashi. Parsing still rejects a truncated file.
     let _ja_derived = parse_annotations(sources.ja_derived)?;
     let en_derived = parse_annotations(sources.en_derived)?;
+    let readings = reading_index(sources.readings);
     let mut entries: BTreeMap<String, Vec<(u8, String)>> = BTreeMap::new();
 
     for item in &emoji {
@@ -87,10 +92,10 @@ pub fn parse(sources: &Sources<'_>) -> Result<BTreeMap<String, Vec<String>>, Par
         }
         let candidate = character.to_string();
         if annotation.tts {
-            add_japanese_token(&mut entries, annotation.text.trim(), &candidate, 0);
+            add_symbol_name(&mut entries, annotation.text.trim(), &candidate, &readings);
         } else {
             for token in annotation.text.split('|') {
-                add_japanese_token(&mut entries, token.trim(), &candidate, 0);
+                add_symbol_name(&mut entries, token.trim(), &candidate, &readings);
             }
         }
     }
@@ -115,6 +120,7 @@ pub fn write_dictionary(inputs: &Inputs<'_>, output: &Path) -> io::Result<()> {
         en_derived: &fs::read_to_string(inputs.en_derived)?,
         unicode_data: &fs::read_to_string(inputs.unicode_data)?,
         names_list: &fs::read_to_string(inputs.names_list)?,
+        readings: &read_readings(inputs.readings)?,
     };
     let entries = parse(&sources).map_err(|error| io::Error::other(error.to_string()))?;
     publish(output, |writer| write_entries(writer, &entries))
@@ -377,6 +383,82 @@ fn add_japanese_token(
     } else if let Some(midashi) = japanese_alphabet_midashi(token) {
         push(entries, midashi, candidate, rank);
     }
+}
+
+fn add_symbol_name(
+    entries: &mut BTreeMap<String, Vec<(u8, String)>>,
+    token: &str,
+    candidate: &str,
+    readings: &HashMap<String, Vec<String>>,
+) {
+    if let Some(midashi) = kana_midashi(token) {
+        push(entries, midashi, candidate, 0);
+        return;
+    }
+    if let Some(midashi) = japanese_alphabet_midashi(token) {
+        push(entries, midashi, candidate, 0);
+        return;
+    }
+    let Some(midashi_list) = readings.get(token) else {
+        return;
+    };
+    for midashi in midashi_list {
+        push(entries, midashi.clone(), candidate, 0);
+    }
+}
+
+/// Readings of kanji words from okuri-nasi entries.
+/// A word needs two or more characters. 上 and 丸 have too many readings to use.
+/// Okuri-ari midashi such as `うえむk` are not readings of the noun.
+fn reading_index(text: &str) -> HashMap<String, Vec<String>> {
+    let mut index: HashMap<String, Vec<String>> = HashMap::new();
+    let mut okuri_nasi = false;
+    for line in text.lines() {
+        let line = line.trim_end_matches('\r');
+        if line.starts_with(";;") && line.contains("okuri-ari entries") {
+            okuri_nasi = false;
+            continue;
+        }
+        if line.starts_with(";;") && line.contains("okuri-nasi entries") {
+            okuri_nasi = true;
+            continue;
+        }
+        if !okuri_nasi || line.is_empty() || line.starts_with(';') {
+            continue;
+        }
+        let Some((midashi, rest)) = line.split_once(' ') else {
+            continue;
+        };
+        let Some(midashi) = kana_midashi(midashi) else {
+            continue;
+        };
+        if !rest.starts_with('/') || !rest.ends_with('/') {
+            continue;
+        }
+        for candidate in rest[1..rest.len() - 1].split('/') {
+            let word = candidate.split(';').next().unwrap_or("").trim();
+            if word.chars().count() < 2 || !word.chars().any(model::is_kanji) {
+                continue;
+            }
+            let readings = index.entry(word.to_string()).or_default();
+            if !readings.contains(&midashi) {
+                readings.push(midashi.clone());
+            }
+        }
+    }
+    index
+}
+
+fn read_readings(paths: &[&Path]) -> io::Result<String> {
+    let mut text = String::new();
+    for path in paths {
+        let chunk = fs::read_to_string(path)?;
+        text.push_str(&chunk);
+        if !chunk.ends_with('\n') {
+            text.push('\n');
+        }
+    }
+    Ok(text)
 }
 
 fn add_greek(
@@ -659,6 +741,7 @@ mod tests {
             en_derived: include_str!("../tests/fixtures/emoji/en-derived.xml"),
             unicode_data: include_str!("../tests/fixtures/emoji/UnicodeData.txt"),
             names_list: include_str!("../tests/fixtures/emoji/NamesList.txt"),
+            readings: "",
         }
     }
 
@@ -721,6 +804,48 @@ mod tests {
     }
 
     #[test]
+    fn reads_kanji_symbol_names_from_okuri_nasi() {
+        let mut input = sources();
+        input.ja = r#"
+            <annotation cp="▲">三角 | 上 | 上向黒三角</annotation>
+            <annotation cp="▲" type="tts">上向黒三角</annotation>
+            <annotation cp="▼">三角</annotation>
+            <annotation cp="▼" type="tts">下向黒三角</annotation>
+            <annotation cp="△">上向き白三角</annotation>
+            <annotation cp="△" type="tts">上向き白三角</annotation>
+            <annotation cp="→">右 | 矢印</annotation>
+            <annotation cp="→" type="tts">右向矢印</annotation>
+            <annotation cp="※">米印</annotation>
+            <annotation cp="※" type="tts">米印</annotation>
+            <annotation cp="●">黒丸</annotation>
+            <annotation cp="●" type="tts">黒丸</annotation>
+            <annotation cp="😀">笑顔</annotation>
+            <annotation cp="😀" type="tts">笑顔</annotation>
+        "#;
+        input.readings = "\
+;; okuri-ari entries.
+うえむk /上向/
+;; okuri-nasi entries.
+さんかく /三角;幾何/参画/
+サンカク /三角/
+やじるし /矢印/
+こめじるし /米印/
+くろまる /黒丸/
+うえ /上/
+えがお /笑顔/
+";
+        let text = format_entries(&parse(&input).unwrap());
+        assert_eq!(line(&text, "さんかく"), Some("さんかく /▲/▼/"));
+        assert_eq!(line(&text, "やじるし"), Some("やじるし /→/"));
+        assert_eq!(line(&text, "こめじるし"), Some("こめじるし /※/"));
+        assert_eq!(line(&text, "くろまる"), Some("くろまる /●/"));
+        for absent in ["うえ", "うえむk", "えがお", "あ"] {
+            assert_eq!(line(&text, absent), None, "{absent}");
+        }
+        assert!(!text.contains('△'));
+    }
+
+    #[test]
     fn rejects_a_bad_emoji_test_line() {
         let mut input = sources();
         input.emoji_test = "not a code\n";
@@ -756,6 +881,7 @@ mod tests {
             en_derived: &directory.join("en-derived.xml"),
             unicode_data: &directory.join("UnicodeData.txt"),
             names_list: &directory.join("NamesList.txt"),
+            readings: &[],
         };
         let error = write_dictionary(&inputs, &output).unwrap_err();
         assert!(error.to_string().contains("truncated annotation"));

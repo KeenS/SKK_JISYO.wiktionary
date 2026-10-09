@@ -203,18 +203,6 @@ generate() {
         skkdic-sort < tmp.shikakugoma | skkdic-expr2 > tmp.shikakugoma.sorted
         cat unicode-header.txt tmp.shikakugoma.sorted > SKK-JISYO.shikakugoma
         fetch_emoji
-        echo "Generating emoji dictionary"
-        cargo run --release --bin emoji_jisyo -- \
-            data/emoji-test.txt \
-            data/emoji-annotations-ja.xml \
-            data/emoji-annotations-en.xml \
-            data/emoji-annotations-derived-ja.xml \
-            data/emoji-annotations-derived-en.xml \
-            data/UnicodeData.txt \
-            data/NamesList.txt \
-            tmp.emoji
-        skkdic-sort < tmp.emoji | skkdic-expr2 > tmp.emoji.sorted
-        cat unicode-header.txt tmp.emoji.sorted > SKK-JISYO.emoji
         fetch_edrdg
         echo "Generating JMnedict dictionary"
         cargo run --release --bin jmnedict_jisyo -- \
@@ -278,6 +266,20 @@ generate() {
         cat tmp.jion tmp.wiktionary.jion | skkdic-sort | skkdic-expr2 > tmp.jion.sorted
         cat header.txt tmp.jion.sorted > tmp.jion.headered
         sort_candidates tmp.jion.headered SKK-JISYO.jion
+        echo "Generating emoji dictionary"
+        cargo run --release --bin emoji_jisyo -- \
+            data/emoji-test.txt \
+            data/emoji-annotations-ja.xml \
+            data/emoji-annotations-en.xml \
+            data/emoji-annotations-derived-ja.xml \
+            data/emoji-annotations-derived-en.xml \
+            data/UnicodeData.txt \
+            data/NamesList.txt \
+            tmp.emoji \
+            SKK-JISYO.wiktionary \
+            SKK-JISYO.jmdict
+        skkdic-sort < tmp.emoji | skkdic-expr2 > tmp.emoji.sorted
+        cat unicode-header.txt tmp.emoji.sorted > SKK-JISYO.emoji
         echo "Cleaning up"
         rm tmp.* ids.txt
     )

@@ -129,14 +129,6 @@ Wiktionary に記事がない漢字も入ります。「こう」のようなあ
 
 `にっこり` と `grinningface` は `😀`、`はーと` と `redheart` は `❤️`、`flagjapan` は `🇯🇵` です。候補に U+FE0F が入ることがあります。古い SKK では、U+FE0F や ZWJ を含む候補を 1 文字として確定できないことがあります。
 
-次の見出しはありません。
-
-* 漢字を含む注釈（`にっこり笑う`、`赤いハート`、`にほん`、`はた`）
-* 英語のキーワード（`face`）
-* 漢字だけの記号名（`→`、`※`）
-* キーボードで直接打てる文字（`!`、`-`）
-* ギリシャ文字のかな見出し（`かっぱ`）
-
 `.wiktionary` とはライセンスが異なるので再配布の際はご注意下さい。
 
 たとえば次のように変換できます。
@@ -148,11 +140,15 @@ grinningface /😀/
 kappa /κ/
 いんふぃにてぃ /∞/
 ゆーろ /€/
+さんかく /▲/▼/
+やじるし /→/
+こめじるし /※/
+くろまる /●/
 ```
 
 ### 使い方
 
-絵文字を日本語の語やアルファベットの名前から、ギリシャ文字を文字名から、記号をかなの外来語から入力するときに使います。通常のSKK辞書として使えます。複数辞書をサポートしていない場合は、「1つの辞書にまとめる」のコマンドで SKK-JISYO.wiktionary とまとめて利用下さい。
+絵文字を日本語の語やアルファベットの名前から、ギリシャ文字を文字名から、記号をかなの外来語と、辞書から戻した漢字の読みから入力するときに使います。通常のSKK辞書として使えます。複数辞書をサポートしていない場合は、「1つの辞書にまとめる」のコマンドで SKK-JISYO.wiktionary とまとめて利用下さい。
 
 ## SKKの住所辞書
 ### これは何？
@@ -517,7 +513,7 @@ SKK-JISYO.unihan
 
 ### 絵文字辞書の生成
 
-`./make.sh` が次のファイルを `data/` に置きます。リポジトリのルートで辞書を生成します。
+`./make.sh` が次のファイルを `data/` に置きます。リポジトリのルートで辞書を生成します。末尾の2つは漢字の記号名を読みに戻す辞書で、先に生成しておきます。`make.sh` は `SKK-JISYO.wiktionary` と `SKK-JISYO.jmdict` のあとで絵文字辞書を作ります。
 
 ``` console
 $ cargo run --release --bin emoji_jisyo -- \
@@ -528,7 +524,9 @@ $ cargo run --release --bin emoji_jisyo -- \
     data/emoji-annotations-derived-en.xml \
     data/UnicodeData.txt \
     data/NamesList.txt \
-    tmp.emoji
+    tmp.emoji \
+    SKK-JISYO.wiktionary \
+    SKK-JISYO.jmdict
 $ skkdic-sort < tmp.emoji | skkdic-expr2 > tmp.emoji.sorted
 $ cat unicode-header.txt tmp.emoji.sorted > SKK-JISYO.emoji
 ```

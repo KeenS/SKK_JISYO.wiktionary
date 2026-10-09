@@ -24,6 +24,8 @@ fn main() {
         usage()
     };
     let output = args.next().unwrap_or_else(|| "tmp.emoji".to_string());
+    let reading_paths: Vec<String> = args.collect();
+    let reading_refs: Vec<&Path> = reading_paths.iter().map(Path::new).collect();
     let inputs = Inputs {
         emoji_test: Path::new(&emoji_test),
         ja: Path::new(&ja),
@@ -32,6 +34,7 @@ fn main() {
         en_derived: Path::new(&en_derived),
         unicode_data: Path::new(&unicode_data),
         names_list: Path::new(&names_list),
+        readings: &reading_refs,
     };
     if let Err(error) = emoji::write_dictionary(&inputs, Path::new(&output)) {
         eprintln!("emoji_jisyo: {error}");
@@ -41,7 +44,7 @@ fn main() {
 
 fn usage() -> ! {
     eprintln!(
-        "Usage: emoji_jisyo EMOJI_TEST JA_XML EN_XML JA_DERIVED EN_DERIVED UNICODE_DATA NAMES_LIST [OUTPUT]"
+        "Usage: emoji_jisyo EMOJI_TEST JA_XML EN_XML JA_DERIVED EN_DERIVED UNICODE_DATA NAMES_LIST [OUTPUT [READING_JISYO...]]"
     );
     process::exit(2);
 }
