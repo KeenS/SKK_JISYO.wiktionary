@@ -46,6 +46,19 @@ struct Entry {
     kebs: Vec<Keb>,
     rebs: Vec<Reb>,
     okuri: bool,
+    counters: Vec<CounterSense>,
+}
+
+/// One `ctr` sense. Empty lists mean the sense is not limited to those kanji or readings.
+struct CounterSense {
+    kanji: Vec<String>,
+    readings: Vec<String>,
+}
+
+struct SenseBuf {
+    kanji: Vec<String>,
+    readings: Vec<String>,
+    counter: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -55,9 +68,12 @@ enum Slot {
     Reb,
     Restr,
     Pos,
+    Stagk,
+    Stagr,
 }
 
 /// Bare SKK lines from JMdict_e. Okuri verbs and i-adjectives use `okuri_romaji`.
+/// A `ctr` sense also emits `#reading` numeric candidates and `なんreading` / `何`.
 pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
     let entities = parse_entities(text);
     let mut reader = Reader::from_str(text);
@@ -69,6 +85,7 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
     let mut entry: Option<Entry> = None;
     let mut current_keb: Option<Keb> = None;
     let mut current_reb: Option<Reb> = None;
+    let mut current_sense: Option<SenseBuf> = None;
     let mut slot = Slot::None;
     let mut text_buf = String::new();
 
@@ -87,6 +104,15 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                             kebs: Vec::new(),
                             rebs: Vec::new(),
                             okuri: false,
+                            counters: Vec::new(),
+                        });
+                        current_sense = None;
+                    }
+                    "sense" => {
+                        current_sense = Some(SenseBuf {
+                            kanji: Vec::new(),
+                            readings: Vec::new(),
+                            counter: false,
                         });
                     }
                     "k_ele" => {
@@ -127,6 +153,8 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                         }
                     }
                     "pos" => slot = Slot::Pos,
+                    "stagk" => slot = Slot::Stagk,
+                    "stagr" => slot = Slot::Stagr,
                     _ => {}
                 }
                 text_buf.clear();
@@ -164,9 +192,7 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
             Event::GeneralRef(reference) => {
                 if slot == Slot::Pos {
                     if let Some(name) = entity_name(&reference) {
-                        if let Some(entry) = entry.as_mut() {
-                            entry.okuri |= is_okuri_pos(&name);
-                        }
+                        note_pos(&mut entry, &mut current_sense, &name);
                     }
                 } else if let Some(character) = reference.resolve_char_ref().ok().flatten() {
                     append_text(&mut text_buf, slot, &character.to_string());
@@ -206,10 +232,28 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                         slot = Slot::None;
                     }
                     "pos" => {
-                        if let Some(entry) = entry.as_mut() {
-                            entry.okuri |= is_okuri_pos(text_buf.trim());
-                        }
+                        note_pos(&mut entry, &mut current_sense, text_buf.trim());
                         slot = Slot::None;
+                    }
+                    "stagk" => {
+                        push_sense_limit(&mut current_sense, true, text_buf.trim());
+                        slot = Slot::None;
+                    }
+                    "stagr" => {
+                        push_sense_limit(&mut current_sense, false, text_buf.trim());
+                        slot = Slot::None;
+                    }
+                    "sense" => {
+                        if let Some(sense) = current_sense.take() {
+                            if sense.counter {
+                                if let Some(entry) = entry.as_mut() {
+                                    entry.counters.push(CounterSense {
+                                        kanji: sense.kanji,
+                                        readings: sense.readings,
+                                    });
+                                }
+                            }
+                        }
                     }
                     "k_ele" => {
                         if let Some(keb) = current_keb.take() {
@@ -302,6 +346,84 @@ fn add_entry(entries: &mut BTreeMap<String, Vec<Candidate>>, entry: Entry) {
             }
             push(entries, reading.clone(), keb.text.clone(), priority);
         }
+    }
+    add_counters(entries, &entry);
+}
+
+/// `#0` keeps the typed digits, `#3` is positional kanji (十二), `#1` is fullwidth,
+/// `#2` is one kanji per digit (一二). libskk and DDSKK both read the digit after `#`.
+const NUMERIC_TYPES: [&str; 4] = ["0", "3", "1", "2"];
+
+fn add_counters(entries: &mut BTreeMap<String, Vec<Candidate>>, entry: &Entry) {
+    if entry.counters.is_empty() {
+        return;
+    }
+    for reb in &entry.rebs {
+        let Some(reading) = normalize_reading(&reb.text) else {
+            continue;
+        };
+        // んち is the tail of にち. Prefixing なん would produce なんんち.
+        if reading.starts_with('ん') {
+            continue;
+        }
+        for keb in &entry.kebs {
+            if keb.text.contains('/') || keb.text.contains(';') {
+                continue;
+            }
+            if !reb.restr.is_empty() && !reb.restr.iter().any(|restr| restr == &keb.text) {
+                continue;
+            }
+            if !counter_covers(&entry.counters, &keb.text, &reb.text) {
+                continue;
+            }
+            let numeric = format!("#{reading}");
+            for kind in NUMERIC_TYPES {
+                push(
+                    entries,
+                    numeric.clone(),
+                    format!("#{kind}{}", keb.text),
+                    false,
+                );
+            }
+            push(
+                entries,
+                format!("なん{reading}"),
+                format!("何{}", keb.text),
+                false,
+            );
+        }
+    }
+}
+
+fn counter_covers(senses: &[CounterSense], kanji: &str, reading: &str) -> bool {
+    senses.iter().any(|sense| {
+        (sense.kanji.is_empty() || sense.kanji.iter().any(|item| item == kanji))
+            && (sense.readings.is_empty() || sense.readings.iter().any(|item| item == reading))
+    })
+}
+
+fn note_pos(entry: &mut Option<Entry>, sense: &mut Option<SenseBuf>, name: &str) {
+    if let Some(entry) = entry.as_mut() {
+        entry.okuri |= is_okuri_pos(name);
+    }
+    if name == "ctr" {
+        if let Some(sense) = sense.as_mut() {
+            sense.counter = true;
+        }
+    }
+}
+
+fn push_sense_limit(sense: &mut Option<SenseBuf>, kanji: bool, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    let Some(sense) = sense.as_mut() else {
+        return;
+    };
+    if kanji {
+        sense.kanji.push(text.to_string());
+    } else {
+        sense.readings.push(text.to_string());
     }
 }
 
@@ -505,6 +627,30 @@ mod tests {
         assert!(line(&text, "なかぐろ").is_none());
         assert!(!text.contains("to eat"));
         assert!(!text.contains("usually written"));
+    }
+
+    #[test]
+    fn builds_counter_numeric_entries() {
+        let text = text();
+        assert_eq!(
+            line(&text, "#ひき"),
+            Some("#ひき /#0匹/#3匹/#1匹/#2匹/#0疋/#3疋/#1疋/#2疋/")
+        );
+        assert_eq!(
+            line(&text, "#き"),
+            Some("#き /#0匹/#3匹/#1匹/#2匹/#0疋/#3疋/#1疋/#2疋/")
+        );
+        assert_eq!(line(&text, "なんひき"), Some("なんひき /何匹/何疋/"));
+        assert_eq!(line(&text, "なんき"), Some("なんき /何匹/何疋/"));
+        assert_eq!(line(&text, "もと"), Some("もと /元/本/"));
+        assert_eq!(line(&text, "#もと"), Some("#もと /#0本/#3本/#1本/#2本/"));
+        assert_eq!(line(&text, "なんもと"), Some("なんもと /何本/"));
+        assert_eq!(line(&text, "ほん"), Some("ほん /本/"));
+        assert_eq!(line(&text, "#ほん"), Some("#ほん /#0本/#3本/#1本/#2本/"));
+        assert_eq!(line(&text, "なんほん"), Some("なんほん /何本/"));
+        assert!(line(&text, "#んち").is_none());
+        assert!(line(&text, "なんんち").is_none());
+        assert!(line(&text, "#にほんご").is_none());
     }
 
     #[test]

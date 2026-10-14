@@ -10,6 +10,7 @@
 <!ENTITY vs "noun or participle which takes the aux. verb suru">
 <!ENTITY vt "transitive verb">
 <!ENTITY mystery "something else">
+<!ENTITY ctr "counter">
 ]>
 <JMdict>
 <entry>
@@ -102,5 +103,39 @@
 <k_ele><keb>不明</keb></k_ele>
 <r_ele><reb>ふめい</reb></r_ele>
 <sense><pos>&mystery;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>匹</keb></k_ele>
+<k_ele><keb>疋</keb></k_ele>
+<r_ele><reb>ひき</reb></r_ele>
+<r_ele><reb>き</reb></r_ele>
+<sense>
+<stagr>ひき</stagr>
+<pos>&ctr;</pos>
+</sense>
+<sense>
+<stagr>き</stagr>
+<pos>&ctr;</pos>
+</sense>
+</entry>
+<entry>
+<k_ele><keb>元</keb></k_ele>
+<k_ele><keb>本</keb></k_ele>
+<r_ele><reb>もと</reb></r_ele>
+<sense>
+<stagk>本</stagk>
+<pos>&ctr;</pos>
+</sense>
+<sense><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>本</keb></k_ele>
+<r_ele><reb>ほん</reb></r_ele>
+<sense><pos>&ctr;</pos><pos>&n;</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>日</keb></k_ele>
+<r_ele><reb>んち</reb></r_ele>
+<sense><pos>&ctr;</pos></sense>
 </entry>
 </JMdict>
