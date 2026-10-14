@@ -8,7 +8,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 use crate::jion::on_reading::katakana_to_hiragana;
-use crate::jion::wiktionary::{okuri_romaji, split_candidate};
+use crate::jion::wiktionary::{ichidan_ru_okuri, okuri_romaji, split_candidate};
 use crate::model::is_kanji;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -46,6 +46,10 @@ struct Entry {
     kebs: Vec<Keb>,
     rebs: Vec<Reb>,
     okuri: bool,
+    /// `v1`. 送り仮名が「る」だけのとき、ます・た・ない・ようの見出しを足す。
+    ichidan: bool,
+    /// `vk`. 来る・やって来る。
+    kuru: bool,
     counters: Vec<CounterSense>,
 }
 
@@ -104,6 +108,8 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                             kebs: Vec::new(),
                             rebs: Vec::new(),
                             okuri: false,
+                            ichidan: false,
+                            kuru: false,
                             counters: Vec::new(),
                         });
                         current_sense = None;
@@ -340,7 +346,17 @@ fn add_entry(entries: &mut BTreeMap<String, Vec<Candidate>>, entry: Entry) {
             let priority = keb.priority || reb.priority;
             if entry.okuri {
                 if let Some((midashi, stem)) = okuri_pair(&keb.text, &reading) {
-                    push(entries, midashi, stem, priority);
+                    push(entries, midashi, stem.clone(), priority);
+                    if entry.ichidan && !entry.kuru {
+                        for extra in ichidan_ru_midashi(&keb.text, &reading) {
+                            push(entries, extra, stem.clone(), priority);
+                        }
+                    }
+                    if entry.kuru {
+                        for extra in kuru_midashi(&keb.text, &reading) {
+                            push(entries, extra, stem.clone(), priority);
+                        }
+                    }
                     continue;
                 }
             }
@@ -405,6 +421,8 @@ fn counter_covers(senses: &[CounterSense], kanji: &str, reading: &str) -> bool {
 fn note_pos(entry: &mut Option<Entry>, sense: &mut Option<SenseBuf>, name: &str) {
     if let Some(entry) = entry.as_mut() {
         entry.okuri |= is_okuri_pos(name);
+        entry.ichidan |= name == "v1";
+        entry.kuru |= name == "vk";
     }
     if name == "ctr" {
         if let Some(sense) = sense.as_mut() {
@@ -444,6 +462,59 @@ fn push(
         priority,
         order,
     });
+}
+
+/// 着る → きm（着ます）、きt（着た）、きn（着ない）、きy（着よう）。
+/// 食べるのように送り仮名が「る」より長い一段は、終止形と同じ見出しで足りる。
+fn ichidan_ru_midashi(keb: &str, reading: &str) -> Vec<String> {
+    let (head, tail) = split_candidate(keb);
+    if head.is_empty() {
+        return Vec::new();
+    }
+    let tail = katakana_to_hiragana(tail);
+    if tail != "る" {
+        return Vec::new();
+    }
+    let Some(stem) = reading.strip_suffix('る') else {
+        return Vec::new();
+    };
+    if stem.is_empty() {
+        return Vec::new();
+    }
+    ichidan_ru_okuri(stem).into()
+}
+
+/// カ変。来るは きます `きm`、きた `きt`、こない `こn`、こよう `こy`、こい `こi`。
+/// やって来るも語幹の「く」だけが き / こ に替わる。
+fn kuru_midashi(keb: &str, reading: &str) -> Vec<String> {
+    let (head, tail) = split_candidate(keb);
+    if head.is_empty() {
+        return Vec::new();
+    }
+    let tail = katakana_to_hiragana(tail);
+    if tail != "る" {
+        return Vec::new();
+    }
+    let Some(stem) = reading.strip_suffix('る') else {
+        return Vec::new();
+    };
+    let Some(prefix) = stem.strip_suffix('く') else {
+        return Vec::new();
+    };
+    let mut midashi = Vec::with_capacity(7);
+    for (vowel, consonants) in [
+        ("き", ['m', 't'].as_slice()),
+        ("こ", ['n', 'y', 'i', 'r', 's'].as_slice()),
+    ] {
+        for consonant in consonants {
+            let mut key = String::with_capacity(prefix.len() + vowel.len() + 1);
+            key.push_str(prefix);
+            key.push_str(vowel);
+            key.push(*consonant);
+            midashi.push(key);
+        }
+    }
+    midashi
 }
 
 fn okuri_pair(keb: &str, reading: &str) -> Option<(String, String)> {
@@ -651,6 +722,44 @@ mod tests {
         assert!(line(&text, "#んち").is_none());
         assert!(line(&text, "なんんち").is_none());
         assert!(line(&text, "#にほんご").is_none());
+    }
+
+    #[test]
+    fn conjugates_ichidan_ru_and_kuru() {
+        let text = format_entries(
+            &parse(
+                r#"<JMdict>
+<entry><k_ele><keb>食べる</keb></k_ele><r_ele><reb>たべる</reb></r_ele><sense><pos>v1</pos></sense></entry>
+<entry><k_ele><keb>着る</keb></k_ele><r_ele><reb>きる</reb></r_ele><sense><pos>v1</pos><pos>vt</pos></sense></entry>
+<entry><k_ele><keb>切る</keb></k_ele><r_ele><reb>きる</reb></r_ele><sense><pos>v5r</pos></sense></entry>
+<entry><k_ele><keb>来る</keb></k_ele><k_ele><keb>來る</keb></k_ele><r_ele><reb>くる</reb></r_ele><sense><pos>vk</pos></sense></entry>
+<entry><k_ele><keb>出来る</keb></k_ele><r_ele><reb>できる</reb></r_ele><sense><pos>v1</pos></sense></entry>
+<entry><k_ele><keb>やって来る</keb></k_ele><r_ele><reb>やってくる</reb></r_ele><sense><pos>vk</pos></sense></entry>
+</JMdict>"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(line(&text, "たb"), Some("たb /食/"));
+        assert!(line(&text, "たm").is_none());
+        assert_eq!(line(&text, "きr"), Some("きr /着/切/"));
+        assert_eq!(line(&text, "きm"), Some("きm /着/来/來/"));
+        assert_eq!(line(&text, "きt"), Some("きt /着/来/來/"));
+        assert_eq!(line(&text, "きn"), Some("きn /着/"));
+        assert_eq!(line(&text, "きy"), Some("きy /着/"));
+        assert!(!line(&text, "きm").unwrap().contains("切"));
+        assert_eq!(line(&text, "くr"), Some("くr /来/來/"));
+        assert_eq!(line(&text, "こn"), Some("こn /来/來/"));
+        assert_eq!(line(&text, "こy"), Some("こy /来/來/"));
+        assert_eq!(line(&text, "こi"), Some("こi /来/來/"));
+        assert_eq!(line(&text, "こr"), Some("こr /来/來/"));
+        assert_eq!(line(&text, "こs"), Some("こs /来/來/"));
+        assert_eq!(line(&text, "できm"), Some("できm /出来/"));
+        assert_eq!(line(&text, "できt"), Some("できt /出来/"));
+        assert_eq!(line(&text, "できr"), Some("できr /出来/"));
+        assert_eq!(line(&text, "やってきm"), Some("やってきm /やって来/"));
+        assert_eq!(line(&text, "やってきt"), Some("やってきt /やって来/"));
+        assert_eq!(line(&text, "やってこn"), Some("やってこn /やって来/"));
+        assert_eq!(line(&text, "やってくr"), Some("やってくr /やって来/"));
     }
 
     #[test]

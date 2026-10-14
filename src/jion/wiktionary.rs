@@ -26,6 +26,8 @@ pub struct JapanesePage {
     pub noun_readings: Vec<String>,
     pub pron_readings: Vec<String>,
     pub verb_titles: Vec<String>,
+    /// 現代の上一段・下一段で、送り仮名が「る」だけのもの。着る、出来る。
+    pub ichidan_titles: Vec<String>,
     pub adjective_titles: Vec<String>,
     pub adverb_titles: Vec<String>,
     pub suru_readings: Vec<String>,
@@ -891,6 +893,7 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
+    page.ichidan_titles = ichidan_ru_titles(text);
     page
 }
 
@@ -1722,14 +1725,138 @@ fn okuri_candidates(
     candidate: &str,
     generate_onbin: bool,
 ) -> Vec<WiktionaryEntry> {
+    let ichidan_ru = split_candidate(candidate).1 == "る"
+        && page.ichidan_titles.iter().any(|title| title == candidate);
     let mut entries = Vec::new();
     for entry in okuri_candidates_all(page, candidate) {
         if generate_onbin {
             entries.extend(okuri_onbin_entries(&entry));
         }
+        // 着るの「ます」「ない」「よう」は終止形の r と見出しが違う。
+        // 「た」「て」は r の音便 t と同じ見出しになる。
+        if ichidan_ru {
+            if let Some(stem) = entry.reading.strip_suffix('r') {
+                if !stem.is_empty() {
+                    for reading in ichidan_ru_okuri(stem) {
+                        if entries.iter().any(|existing| {
+                            existing.reading == reading && existing.candidate == entry.candidate
+                        }) {
+                            continue;
+                        }
+                        entries.push(WiktionaryEntry {
+                            reading,
+                            candidate: entry.candidate.clone(),
+                            suru: false,
+                            source: EntrySource::WagoOkuri,
+                        });
+                    }
+                }
+            }
+        }
         entries.push(entry);
     }
     entries
+}
+
+/// 送り仮名が「る」だけの一段活用。語幹 `き` から `きm` `きt` `きn` `きy`。
+pub(crate) fn ichidan_ru_okuri(stem: &str) -> [String; 4] {
+    ['m', 't', 'n', 'y'].map(|consonant| {
+        let mut reading = String::with_capacity(stem.len() + consonant.len_utf8());
+        reading.push_str(stem);
+        reading.push(consonant);
+        reading
+    })
+}
+
+/// 一段活用の節にある、送り仮名が「る」だけの動詞。五段の節にある切るは含めない。
+fn ichidan_ru_titles(text: &str) -> Vec<String> {
+    let mut titles = Vec::new();
+    for index in ichidan_template_indexes(text) {
+        let Some(section) =
+            enclosing_section(text, index, 3).or_else(|| enclosing_section(text, index, 2))
+        else {
+            continue;
+        };
+        if section.contains("{{日本語五段活用") {
+            continue;
+        }
+        for title in extract_bracket_titles(section) {
+            if !title.contains(is_kanji) || split_candidate(&title).1 != "る" {
+                continue;
+            }
+            if !titles.contains(&title) {
+                titles.push(title);
+            }
+        }
+    }
+    titles
+}
+
+fn ichidan_template_indexes(text: &str) -> Vec<usize> {
+    let mut indexes = Vec::new();
+    for marker in ["{{日本語上一段活用", "{{日本語下一段活用"] {
+        let mut cursor = 0;
+        while let Some(offset) = text[cursor..].find(marker) {
+            let index = cursor + offset;
+            indexes.push(index);
+            cursor = index + marker.len();
+        }
+    }
+    indexes.sort_unstable();
+    indexes.dedup();
+    indexes
+}
+
+fn enclosing_section(text: &str, index: usize, level: usize) -> Option<&str> {
+    let (heading_start, content_start) = heading_before(text, index, level)?;
+    let mut end = text.len();
+    let mut offset = 0;
+    for line in text[content_start..].split_inclusive('\n') {
+        let trimmed = line.trim_end_matches(['\n', '\r']);
+        if line_heading_level(trimmed).is_some_and(|found| found <= level) {
+            end = content_start + offset;
+            break;
+        }
+        offset += line.len();
+    }
+    Some(&text[heading_start..end])
+}
+
+fn heading_before(text: &str, index: usize, level: usize) -> Option<(usize, usize)> {
+    let mut line_start = 0;
+    let mut found = None;
+    for line in text[..index].split_inclusive('\n') {
+        let next = line_start + line.len();
+        let trimmed = line.trim_end_matches(['\n', '\r']);
+        if line_heading_level(trimmed) == Some(level) {
+            found = Some((line_start, next));
+        }
+        line_start = next;
+    }
+    found
+}
+
+fn line_heading_level(line: &str) -> Option<usize> {
+    let line = line.trim_end_matches(' ');
+    if !line.starts_with('=') || !line.ends_with('=') {
+        return None;
+    }
+    let level = line.bytes().take_while(|byte| *byte == b'=').count();
+    if !(2..=6).contains(&level) || line.len() < level * 2 {
+        return None;
+    }
+    if !line.as_bytes()[line.len() - level..]
+        .iter()
+        .all(|byte| *byte == b'=')
+    {
+        return None;
+    }
+    let inner = &line[level..line.len() - level];
+    if inner.is_empty() || inner.starts_with('=') {
+        None
+    } else {
+        Some(level)
+    }
 }
 
 fn okuri_onbin_entries(dictionary_entry: &WiktionaryEntry) -> Vec<WiktionaryEntry> {
@@ -2919,6 +3046,55 @@ mod tests {
         assert!(entries.contains(&"かk /書/".to_string()));
         assert!(entries.contains(&"かi /書/".to_string()));
         assert!(entries.iter().all(|entry| !entry.starts_with("かt ")));
+    }
+
+    #[test]
+    fn generates_masu_okuri_for_ichidan_ru_but_not_godan() {
+        let page = parse_japanese_page(
+            "きる",
+            r#"==={{verb}}: 切る===
+{{ja-verb}}【[[切]]る】
+{{日本語五段活用|kana=きる}}
+==={{verb}}: 着る===
+'''きる'''【[[着]]る・[[著]]る】
+{{ja-accent-common|h|き|る}}
+====活用====
+{{日本語上一段活用}}
+"#,
+        );
+        assert_eq!(
+            page.ichidan_titles,
+            vec!["着る".to_string(), "著る".to_string()]
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        for key in ["きm", "きt", "きn", "きy", "きr"] {
+            assert!(
+                entries.contains(&format!("{key} /着/")),
+                "{key}: {entries:?}"
+            );
+            assert!(
+                entries.contains(&format!("{key} /著/")),
+                "{key}: {entries:?}"
+            );
+        }
+        assert!(entries.contains(&"きr /切/".to_string()));
+        assert!(entries.contains(&"きt /切/".to_string()));
+        assert!(entries.iter().all(|entry| {
+            !entry.starts_with("きm /切/")
+                && !entry.starts_with("きn /切/")
+                && !entry.starts_with("きy /切/")
+        }));
+    }
+
+    #[test]
+    fn leaves_ichidan_with_longer_okurigana_on_the_dictionary_key() {
+        let page = parse_japanese_page(
+            "たべる",
+            "==={{verb}}===\n{{ja-verb}}【[[食]]べる】\n{{ja-accent-common|h|た|べ|る}}\n{{日本語下一段活用}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert!(entries.contains(&"たb /食/".to_string()));
+        assert!(entries.iter().all(|entry| !entry.starts_with("たm ")));
     }
 
     #[test]
