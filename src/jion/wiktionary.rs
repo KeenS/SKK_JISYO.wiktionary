@@ -390,6 +390,99 @@ fn clean_wikitext(value: &str) -> String {
         .replace("]]", "")
 }
 
+/// Optional okurigana is a single kana in parentheses, as in 立（ち）入る.
+/// That spelling is not something to insert. Emit the form that keeps the kana
+/// first, then the form that omits it. A longer parenthetical, such as （まれ）
+/// or （がる）, is a label or a reading and stays as written.
+fn expand_optional_okurigana(candidate: &str) -> Vec<String> {
+    let groups = optional_okurigana_spans(candidate);
+    if groups.is_empty() {
+        return vec![candidate.to_string()];
+    }
+
+    let mut forms = vec![String::new()];
+    let mut cursor = 0;
+    for (start, end, kana) in groups {
+        let prefix = &candidate[cursor..start];
+        let mut next = Vec::with_capacity(forms.len() * 2);
+        for form in &forms {
+            let mut with_kana = form.clone();
+            with_kana.push_str(prefix);
+            with_kana.push(kana);
+            next.push(with_kana);
+
+            let mut without_kana = form.clone();
+            without_kana.push_str(prefix);
+            next.push(without_kana);
+        }
+        forms = next;
+        cursor = end;
+    }
+    let suffix = &candidate[cursor..];
+    for form in &mut forms {
+        form.push_str(suffix);
+    }
+
+    let mut unique = Vec::new();
+    for form in forms {
+        if !form.is_empty() && !unique.contains(&form) {
+            unique.push(form);
+        }
+    }
+    if unique.is_empty() {
+        vec![candidate.to_string()]
+    } else {
+        unique
+    }
+}
+
+/// Byte ranges of `（か）` or `(か)` whose inside is exactly one hiragana.
+fn optional_okurigana_spans(candidate: &str) -> Vec<(usize, usize, char)> {
+    let chars: Vec<(usize, char)> = candidate.char_indices().collect();
+    let mut spans = Vec::new();
+    let mut index = 0;
+    while index < chars.len() {
+        let (start, open) = chars[index];
+        let closing = match open {
+            '（' => '）',
+            '(' => ')',
+            _ => {
+                index += 1;
+                continue;
+            }
+        };
+        if index + 2 < chars.len() {
+            let (_, inner) = chars[index + 1];
+            let (close_at, close) = chars[index + 2];
+            if close == closing && ('ぁ'..='ゟ').contains(&inner) {
+                spans.push((start, close_at + close.len_utf8(), inner));
+                index += 3;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    spans
+}
+
+fn expand_entry_candidates(entries: Vec<WiktionaryEntry>) -> Vec<WiktionaryEntry> {
+    let mut unique = Vec::new();
+    for entry in entries {
+        for candidate in expand_optional_okurigana(&entry.candidate) {
+            if unique.iter().any(|other: &WiktionaryEntry| {
+                other.reading == entry.reading && other.candidate == candidate
+            }) {
+                continue;
+            }
+            unique.push(WiktionaryEntry {
+                candidate,
+                ..entry.clone()
+            });
+        }
+    }
+    unique
+}
+
 fn remove_spaces(value: &str) -> String {
     value.chars().filter(|ch| !ch.is_whitespace()).collect()
 }
@@ -590,9 +683,14 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
     }
 
     for (candidate, reading) in bold_wagokanji_pairs(text) {
-        let source = WagokanjiSource { candidate, reading };
-        if !page.wagokanji_sources.contains(&source) {
-            page.wagokanji_sources.push(source);
+        for candidate in expand_optional_okurigana(&candidate) {
+            let source = WagokanjiSource {
+                candidate,
+                reading: reading.clone(),
+            };
+            if !page.wagokanji_sources.contains(&source) {
+                page.wagokanji_sources.push(source);
+            }
         }
     }
     for source in &page.wagokanji_sources {
@@ -1309,8 +1407,10 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
         if page.verb_titles.contains(candidate) || page.adjective_titles.contains(candidate) {
             continue;
         }
-        if let Some(entry) = okuri_candidate(page, candidate) {
-            entries.push(entry);
+        for form in expand_optional_okurigana(candidate) {
+            if let Some(entry) = okuri_candidate(page, &form) {
+                entries.push(entry);
+            }
         }
     }
     entries.extend(okuri_candidates(page, page.title.as_str(), true));
@@ -1343,15 +1443,7 @@ pub fn wiktionary_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             });
         }
     }
-    let mut unique_entries = Vec::new();
-    for entry in entries {
-        if !unique_entries.iter().any(|other: &WiktionaryEntry| {
-            other.reading == entry.reading && other.candidate == entry.candidate
-        }) {
-            unique_entries.push(entry);
-        }
-    }
-    unique_entries
+    expand_entry_candidates(entries)
 }
 
 pub fn old_japanese_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
@@ -1379,7 +1471,7 @@ pub fn old_japanese_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
             });
         }
     }
-    entries
+    expand_entry_candidates(entries)
 }
 
 pub fn modern_conjugation_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
@@ -1630,17 +1722,19 @@ fn modern_conjugation_candidates(
 ) -> Vec<String> {
     let mut result = Vec::new();
     for title in page.adjective_titles.iter().chain(page.verb_titles.iter()) {
-        let (stem, suffix) = split_candidate(title);
-        if !title.contains(is_kanji) {
-            continue;
-        }
-        if !stem.is_empty()
-            && !suffix.is_empty()
-            && *suffix == conjugation.shuushi
-            && title.ends_with(suffix)
-            && !result.contains(&stem.to_string())
-        {
-            result.push(stem.to_string());
+        for title in expand_optional_okurigana(title) {
+            let (stem, suffix) = split_candidate(&title);
+            if !title.contains(is_kanji) {
+                continue;
+            }
+            if !stem.is_empty()
+                && !suffix.is_empty()
+                && suffix == conjugation.shuushi
+                && title.ends_with(suffix)
+                && !result.contains(&stem.to_string())
+            {
+                result.push(stem.to_string());
+            }
         }
     }
     result
@@ -1725,8 +1819,22 @@ fn okuri_candidates(
     candidate: &str,
     generate_onbin: bool,
 ) -> Vec<WiktionaryEntry> {
+    let forms = expand_optional_okurigana(candidate);
+    if forms.len() != 1 || forms[0] != candidate {
+        let mut entries = Vec::new();
+        for form in forms {
+            entries.extend(okuri_candidates(page, &form, generate_onbin));
+        }
+        return entries;
+    }
+    // 括弧を展開した表記も、元の見出しが一段なら同じ活用キーを出す。
     let ichidan_ru = split_candidate(candidate).1 == "る"
-        && page.ichidan_titles.iter().any(|title| title == candidate);
+        && page.ichidan_titles.iter().any(|title| {
+            title == candidate
+                || expand_optional_okurigana(title)
+                    .iter()
+                    .any(|form| form == candidate)
+        });
     let mut entries = Vec::new();
     for entry in okuri_candidates_all(page, candidate) {
         if generate_onbin {
@@ -1984,6 +2092,18 @@ fn adjective_okuri_entries(page: &JapanesePage, candidate: &str) -> Vec<Wiktiona
     if !page.adjective_titles.iter().any(|title| title == candidate) {
         return Vec::new();
     }
+    let forms = expand_optional_okurigana(candidate);
+    if forms.len() != 1 || forms[0] != candidate {
+        let mut entries = Vec::new();
+        for form in forms {
+            entries.extend(adjective_okuri_form(page, &form));
+        }
+        return entries;
+    }
+    adjective_okuri_form(page, candidate)
+}
+
+fn adjective_okuri_form(page: &JapanesePage, candidate: &str) -> Vec<WiktionaryEntry> {
     let (stem, suffix) = split_candidate(candidate);
     if stem.is_empty() || suffix != "い" {
         return Vec::new();
@@ -3122,6 +3242,93 @@ mod tests {
         assert!(wiktionary_entries(&page)
             .iter()
             .all(|entry| entry.candidate != "歩"));
+    }
+
+    #[test]
+    fn expands_optional_okurigana_into_both_spellings() {
+        assert_eq!(
+            expand_optional_okurigana("立（ち）入る"),
+            vec!["立ち入る".to_string(), "立入る".to_string()]
+        );
+        assert_eq!(
+            expand_optional_okurigana("立(ち)入る"),
+            vec!["立ち入る".to_string(), "立入る".to_string()]
+        );
+        assert_eq!(
+            expand_optional_okurigana("取（り）消（し）"),
+            vec![
+                "取り消し".to_string(),
+                "取り消".to_string(),
+                "取消し".to_string(),
+                "取消".to_string(),
+            ]
+        );
+        assert_eq!(
+            expand_optional_okurigana("免ぐ（まれ）"),
+            vec!["免ぐ（まれ）".to_string()]
+        );
+        assert_eq!(
+            expand_optional_okurigana("煮上（がる）"),
+            vec!["煮上（がる）".to_string()]
+        );
+        assert_eq!(
+            expand_optional_okurigana("恰度（当て字）"),
+            vec!["恰度（当て字）".to_string()]
+        );
+    }
+
+    #[test]
+    fn converts_tachiiru_without_optional_okurigana_parentheses() {
+        let page = parse_japanese_page(
+            "たちいる",
+            "{{ja-accent-common|region=京阪|h|たちい|る}}\n\
+             ==={{verb}}===\n\
+             {{ja-verb}}【[[立]]（ち）[[入]]る】\n\
+             {{日本語五段活用}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert!(
+            entries.iter().all(|entry| !entry.contains('（')),
+            "{entries:?}"
+        );
+        let r_forms: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.starts_with("たちいr "))
+            .cloned()
+            .collect();
+        assert_eq!(
+            r_forms,
+            vec!["たちいr /立ち入/".to_string(), "たちいr /立入/".to_string(),]
+        );
+    }
+
+    #[test]
+    fn converts_akari_without_optional_okurigana_parentheses() {
+        let page = parse_japanese_page("あかり", "{{ja-noun|[[明]]（か）り|[[灯]]り}}");
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert_eq!(
+            entries,
+            vec![
+                "あかり /明かり/".to_string(),
+                "あかり /明り/".to_string(),
+                "あかり /灯り/".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn leaves_rare_label_parentheses_out_of_okuri_candidates() {
+        let page = parse_japanese_page(
+            "ぬぐ",
+            "{{ja-verb}}【[[脱]]ぐ、[[免]]ぐ（まれ）】\n\
+             {{日本語五段活用|kana=ぬぐ}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert!(entries.contains(&"ぬg /脱/".to_string()), "{entries:?}");
+        assert!(
+            entries.iter().all(|entry| !entry.contains("まれ")),
+            "{entries:?}"
+        );
     }
 
     #[test]
