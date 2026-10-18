@@ -8,7 +8,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 use crate::jion::on_reading::katakana_to_hiragana;
-use crate::jion::wiktionary::{ichidan_ru_okuri, okuri_romaji, split_candidate};
+use crate::jion::wiktionary::{ichidan_ru_okuri, okuri_romaji, split_candidate, wa_gyou_okuri};
 use crate::model::is_kanji;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -50,6 +50,8 @@ struct Entry {
     ichidan: bool,
     /// `vk`. 来る・やって来る。
     kuru: bool,
+    /// `v5u` と `v5u-s`。えない・わない・おう。
+    wa_gyou: bool,
     counters: Vec<CounterSense>,
 }
 
@@ -110,6 +112,7 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                             okuri: false,
                             ichidan: false,
                             kuru: false,
+                            wa_gyou: false,
                             counters: Vec::new(),
                         });
                         current_sense = None;
@@ -346,7 +349,16 @@ fn add_entry(entries: &mut BTreeMap<String, Vec<Candidate>>, entry: Entry) {
             let priority = keb.priority || reb.priority;
             if entry.okuri {
                 if let Some((midashi, stem)) = okuri_pair(&keb.text, &reading) {
-                    push(entries, midashi, stem.clone(), priority);
+                    push(entries, midashi.clone(), stem.clone(), priority);
+                    if entry.wa_gyou {
+                        if let Some(kana_stem) = midashi.strip_suffix('u') {
+                            if !kana_stem.is_empty() {
+                                for extra in wa_gyou_okuri(kana_stem) {
+                                    push(entries, extra, stem.clone(), priority);
+                                }
+                            }
+                        }
+                    }
                     if entry.ichidan && !entry.kuru {
                         for extra in ichidan_ru_midashi(&keb.text, &reading) {
                             push(entries, extra, stem.clone(), priority);
@@ -423,6 +435,7 @@ fn note_pos(entry: &mut Option<Entry>, sense: &mut Option<SenseBuf>, name: &str)
         entry.okuri |= is_okuri_pos(name);
         entry.ichidan |= name == "v1";
         entry.kuru |= name == "vk";
+        entry.wa_gyou |= name == "v5u" || name == "v5u-s";
     }
     if name == "ctr" {
         if let Some(sense) = sense.as_mut() {
@@ -676,6 +689,9 @@ mod tests {
         assert_eq!(line(&text, "かk"), Some("かk /書/"));
         assert_eq!(line(&text, "くr"), Some("くr /来/"));
         assert_eq!(line(&text, "あu"), Some("あu /会/"));
+        assert_eq!(line(&text, "あe"), Some("あe /会/"));
+        assert_eq!(line(&text, "あw"), Some("あw /会/"));
+        assert_eq!(line(&text, "あo"), Some("あo /会/"));
         assert_eq!(line(&text, "たかi"), Some("たかi /高/"));
         assert_eq!(line(&text, "いk"), Some("いk /行/"));
         assert_eq!(line(&text, "にほんご"), Some("にほんご /日本語/"));
@@ -760,6 +776,32 @@ mod tests {
         assert_eq!(line(&text, "やってきt"), Some("やってきt /やって来/"));
         assert_eq!(line(&text, "やってこn"), Some("やってこn /やって来/"));
         assert_eq!(line(&text, "やってくr"), Some("やってくr /やって来/"));
+    }
+
+    #[test]
+    fn conjugates_wa_gyou_godan() {
+        let text = format_entries(
+            &parse(
+                r#"<JMdict>
+<entry><k_ele><keb>振る舞う</keb></k_ele><k_ele><keb>振舞う</keb></k_ele><r_ele><reb>ふるまう</reb></r_ele><sense><pos>v5u</pos></sense></entry>
+<entry><k_ele><keb>問う</keb></k_ele><r_ele><reb>とう</reb></r_ele><sense><pos>v5u-s</pos></sense></entry>
+<entry><k_ele><keb>書く</keb></k_ele><r_ele><reb>かく</reb></r_ele><sense><pos>v5k</pos></sense></entry>
+<entry><k_ele><keb>着る</keb></k_ele><r_ele><reb>きる</reb></r_ele><sense><pos>v1</pos></sense></entry>
+</JMdict>"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(line(&text, "ふるまu"), Some("ふるまu /振る舞/振舞/"));
+        assert_eq!(line(&text, "ふるまe"), Some("ふるまe /振る舞/振舞/"));
+        assert_eq!(line(&text, "ふるまw"), Some("ふるまw /振る舞/振舞/"));
+        assert_eq!(line(&text, "ふるまo"), Some("ふるまo /振る舞/振舞/"));
+        assert_eq!(line(&text, "とu"), Some("とu /問/"));
+        assert_eq!(line(&text, "とe"), Some("とe /問/"));
+        assert_eq!(line(&text, "とw"), Some("とw /問/"));
+        assert_eq!(line(&text, "とo"), Some("とo /問/"));
+        assert!(line(&text, "とt").is_none());
+        assert!(line(&text, "かe").is_none());
+        assert!(line(&text, "きe").is_none());
     }
 
     #[test]

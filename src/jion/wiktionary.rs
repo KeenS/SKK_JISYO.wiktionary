@@ -1477,7 +1477,7 @@ pub fn old_japanese_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
 pub fn modern_conjugation_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
     let mut entries = Vec::new();
     for conjugation in &page.modern_conjugations {
-        let renyou_romaji = conjugation
+        let mut renyou_romaji = conjugation
             .renyou
             .iter()
             .filter_map(|suffix| {
@@ -1488,6 +1488,10 @@ pub fn modern_conjugation_entries(page: &JapanesePage) -> Vec<WiktionaryEntry> {
                 }
             })
             .collect::<Vec<_>>();
+        // 終止が「う」のワア行は、えない・わない・おうが終止の u と別見出しになる。
+        if conjugation.shuushi == "う" {
+            renyou_romaji.extend(WA_GYOU_OKURI);
+        }
         if renyou_romaji.is_empty() {
             continue;
         }
@@ -1866,6 +1870,19 @@ fn okuri_candidates(
     entries
 }
 
+/// ワア行五段の、終止 `u` 以外の見出し。`ふるま` から `ふるまe` `ふるまw` `ふるまo`。
+pub(crate) const WA_GYOU_OKURI: [char; 3] = ['e', 'w', 'o'];
+
+/// 語幹 `ふるま` から `ふるまe`（えない）、`ふるまw`（わない）、`ふるまo`（おう）。
+pub(crate) fn wa_gyou_okuri(stem: &str) -> [String; 3] {
+    WA_GYOU_OKURI.map(|consonant| {
+        let mut reading = String::with_capacity(stem.len() + 1);
+        reading.push_str(stem);
+        reading.push(consonant);
+        reading
+    })
+}
+
 /// 送り仮名が「る」だけの一段活用。語幹 `き` から `きm` `きt` `きn` `きy`。
 pub(crate) fn ichidan_ru_okuri(stem: &str) -> [String; 4] {
     ['m', 't', 'n', 'y'].map(|consonant| {
@@ -1971,26 +1988,39 @@ fn okuri_onbin_entries(dictionary_entry: &WiktionaryEntry) -> Vec<WiktionaryEntr
     let Some((stem, dictionary_key_consonant)) = split_onbin_stem(&dictionary_entry.reading) else {
         return Vec::new();
     };
-    let suffix = match dictionary_key_consonant {
-        'r' | 'u' => "t",
-        't' => "tt",
-        'm' | 'n' | 'b' => "n",
-        'k' if is_iku_verb(&dictionary_entry.candidate) => "t",
-        'k' | 'g' => "i",
-        _ => return Vec::new(),
+    let onbin = match dictionary_key_consonant {
+        'r' | 'u' => Some("t"),
+        't' => Some("tt"),
+        'm' | 'n' | 'b' => Some("n"),
+        'k' if is_iku_verb(&dictionary_entry.candidate) => Some("t"),
+        'k' | 'g' => Some("i"),
+        _ => None,
     };
-    let mut key = String::with_capacity(stem.len() + suffix.len());
-    key.push_str(stem);
-    key.push_str(suffix);
-    if key == dictionary_entry.reading {
-        return Vec::new();
+    let mut keys = Vec::new();
+    if let Some(suffix) = onbin {
+        let mut key = String::with_capacity(stem.len() + suffix.len());
+        key.push_str(stem);
+        key.push_str(suffix);
+        if key != dictionary_entry.reading {
+            keys.push(key);
+        }
     }
-    vec![WiktionaryEntry {
-        reading: key,
-        candidate: dictionary_entry.candidate.clone(),
-        suru: false,
-        source: EntrySource::WagoOkuri,
-    }]
+    // 振る舞えないはふるまe。終止のふるまu、未然のふるまw、意志のふるまoも別。
+    if dictionary_key_consonant == 'u' {
+        for key in wa_gyou_okuri(stem) {
+            if key != dictionary_entry.reading && !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
+    }
+    keys.into_iter()
+        .map(|reading| WiktionaryEntry {
+            reading,
+            candidate: dictionary_entry.candidate.clone(),
+            suru: false,
+            source: EntrySource::WagoOkuri,
+        })
+        .collect()
 }
 
 fn split_onbin_stem(reading: &str) -> Option<(&str, char)> {
@@ -2474,6 +2504,15 @@ mod tests {
                 "あt /会/",
                 "あt /逢/",
                 "あt /遇/",
+                "あe /会/",
+                "あe /逢/",
+                "あe /遇/",
+                "あw /会/",
+                "あw /逢/",
+                "あw /遇/",
+                "あo /会/",
+                "あo /逢/",
+                "あo /遇/",
                 "あu /会/",
                 "あu /逢/",
                 "あu /遇/"
@@ -2641,7 +2680,13 @@ mod tests {
         );
         assert_eq!(
             entry_strings(&wiktionary_entries(&page)),
-            vec!["かなt /適/".to_string(), "かなu /適/".to_string()]
+            vec![
+                "かなt /適/".to_string(),
+                "かなe /適/".to_string(),
+                "かなw /適/".to_string(),
+                "かなo /適/".to_string(),
+                "かなu /適/".to_string(),
+            ]
         );
     }
 
@@ -3226,6 +3271,9 @@ mod tests {
         let kaku_entries = entry_strings(&wiktionary_entries(&kaku));
         assert!(kaku_entries.contains(&"かk /書/".to_string()));
         assert!(kaku_entries.contains(&"かi /書/".to_string()));
+        assert!(kaku_entries.iter().all(|entry| {
+            !entry.starts_with("かe ") && !entry.starts_with("かw ") && !entry.starts_with("かo ")
+        }));
 
         let yomu = parse_japanese_page(
             "よむ",
@@ -3234,6 +3282,32 @@ mod tests {
         let yomu_entries = entry_strings(&wiktionary_entries(&yomu));
         assert!(yomu_entries.contains(&"よm /読/".to_string()));
         assert!(yomu_entries.contains(&"よn /読/".to_string()));
+    }
+
+    #[test]
+    fn generates_wa_gyou_keys_for_furumau() {
+        let page = parse_japanese_page(
+            "ふるまう",
+            "{{ja-wagokanji|ふるまう}}{{ja-verb}}【[[振舞]]う、[[振る舞]]う】\n{{日本語五段活用|kana=ふるまう}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        for key in [
+            "ふるまu",
+            "ふるまt",
+            "ふるまi",
+            "ふるまe",
+            "ふるまw",
+            "ふるまo",
+        ] {
+            assert!(
+                entries.contains(&format!("{key} /振舞/")),
+                "{key}: {entries:?}"
+            );
+            assert!(
+                entries.contains(&format!("{key} /振る舞/")),
+                "{key}: {entries:?}"
+            );
+        }
     }
 
     #[test]
