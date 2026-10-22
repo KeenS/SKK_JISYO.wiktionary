@@ -187,6 +187,32 @@ mod tests {
             .iter()
             .all(|entry| entry.source != EntrySource::WagoOkuri));
     }
+
+    #[test]
+    fn skips_hiragana_page_title_that_matches_the_reading() {
+        let entries = redirect_word_entries(
+            Some("やぶさめ".to_string()),
+            "やぶさめ",
+            &["流鏑馬".to_string(), "やぶさめ".to_string()],
+        );
+        let candidates: Vec<_> = entries
+            .iter()
+            .map(|entry| entry.candidate.as_str())
+            .collect();
+        assert_eq!(candidates, vec!["流鏑馬"]);
+    }
+
+    #[test]
+    fn keeps_kanji_and_katakana_page_titles() {
+        let kanji =
+            redirect_word_entries(Some("べつべつ".to_string()), "別別", &["別々".to_string()]);
+        let candidates: Vec<_> = kanji.iter().map(|entry| entry.candidate.as_str()).collect();
+        assert_eq!(candidates, vec!["別別", "別々"]);
+
+        let katakana = redirect_word_entries(Some("ぱそこん".to_string()), "パソコン", &[]);
+        assert_eq!(katakana.len(), 1);
+        assert_eq!(katakana[0].candidate, "パソコン");
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -454,12 +480,16 @@ fn redirect_word_entries(
     let Some(reading) = reading else {
         return Vec::new();
     };
-    let mut entries = vec![WiktionaryEntry {
-        reading: reading.clone(),
-        candidate: canonical_title.to_string(),
-        suru: false,
-        source: EntrySource::Redirect,
-    }];
+    let mut entries = Vec::new();
+    // ページ名が読みと同じひらがなだと、変換しても表記が変わらない。
+    if !spells_its_own_reading(canonical_title, &reading) {
+        entries.push(WiktionaryEntry {
+            reading: reading.clone(),
+            candidate: canonical_title.to_string(),
+            suru: false,
+            source: EntrySource::Redirect,
+        });
+    }
     entries.extend(
         titles
             .iter()
@@ -633,6 +663,14 @@ fn redirect_reading(page: &JapanesePage) -> Option<String> {
                 .find(|reading| valid_dictionary_reading(reading))
                 .cloned()
         })
+}
+
+fn spells_its_own_reading(candidate: &str, reading: &str) -> bool {
+    !candidate.is_empty()
+        && candidate == reading
+        && candidate
+            .chars()
+            .all(|ch| ('ぁ'..='ゖ').contains(&ch) || ch == 'ー')
 }
 
 fn valid_dictionary_reading(reading: &str) -> bool {
