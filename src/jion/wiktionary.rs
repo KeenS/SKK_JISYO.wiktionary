@@ -2133,19 +2133,41 @@ fn adjective_okuri_entries(page: &JapanesePage, candidate: &str) -> Vec<Wiktiona
     adjective_okuri_form(page, candidate)
 }
 
+/// 「いい」は「よい」の終止・連体だけが残った形で、連用は「よく」。`いく` にはしない。
+/// `adj-ix` の読みが「いい」で終わるときも同じ。`可愛い` のように語幹が「い」で終わる
+/// 普通の形容詞はここには入らない。
+pub(crate) fn irregular_ii_reading(reading: &str, kanji_stem: &str, ii_class: bool) -> bool {
+    if reading == "いい" || (ii_class && reading.ends_with("いい")) {
+        return true;
+    }
+    let Some(last) = kanji_stem.chars().next_back() else {
+        return false;
+    };
+    matches!(last, '良' | '好' | '善' | '佳' | '吉' | '宜') && reading.ends_with("いい")
+}
+
 fn adjective_okuri_form(page: &JapanesePage, candidate: &str) -> Vec<WiktionaryEntry> {
     let (stem, suffix) = split_candidate(candidate);
     if stem.is_empty() || suffix != "い" {
         return Vec::new();
     }
 
-    let mut result = Vec::new();
-    for reading in page
+    let title_reading = katakana_to_hiragana(&page.title);
+    let mut readings: Vec<&str> = page
         .wagokanji_readings
         .iter()
         .chain(page.default_sorts.iter())
         .chain(page.noun_readings.iter())
-    {
+        .map(String::as_str)
+        .collect();
+    if hiragana_only(&title_reading) {
+        readings.push(title_reading.as_str());
+    }
+    let mut result = Vec::new();
+    for reading in readings {
+        if irregular_ii_reading(reading, stem, false) {
+            continue;
+        }
         let Some(stem_reading) = reading.strip_suffix('い') else {
             continue;
         };
@@ -2991,6 +3013,45 @@ mod tests {
         assert_eq!(
             entries.iter().map(to_entry).collect::<Vec<_>>(),
             vec![Entry::new("あかr", "明")]
+        );
+    }
+
+    #[test]
+    fn adjective_ku_uses_the_kana_page_title() {
+        let page = parse_japanese_page(
+            "ふとい",
+            "{{kana-DEFAULTSORT}}\n=={{L|ja}}==\n==={{adj}}===\n{{ja-adj}}【[[太]]い】\n===={{conjug}}====\n{{日本語形容詞活用}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert!(entries.contains(&"ふとk /太/".to_string()), "{entries:?}");
+    }
+
+    #[test]
+    fn kawaii_keeps_ku_but_kakkoii_does_not() {
+        let kawaii = parse_japanese_page("かわいい", "{{ja-adj|可愛い}}");
+        let entries = entry_strings(&wiktionary_entries(&kawaii));
+        assert!(
+            entries.contains(&"かわいk /可愛/".to_string()),
+            "{entries:?}"
+        );
+        let kakkoii = parse_japanese_page("かっこいい", "{{ja-adj|格好良い}}");
+        let entries = entry_strings(&wiktionary_entries(&kakkoii));
+        assert!(
+            entries.iter().all(|entry| !entry.starts_with("かっこいk ")),
+            "{entries:?}"
+        );
+    }
+
+    #[test]
+    fn ii_does_not_become_iku() {
+        let page = parse_japanese_page(
+            "いい",
+            "{{ja-adj|良い|好い|善い}}\n{{日本語活用|い|○|○|い|い|○|○|変則的}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert!(
+            entries.iter().all(|entry| !entry.starts_with("いk ")),
+            "{entries:?}"
         );
     }
 

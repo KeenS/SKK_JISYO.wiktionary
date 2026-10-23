@@ -8,7 +8,9 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 use crate::jion::on_reading::katakana_to_hiragana;
-use crate::jion::wiktionary::{ichidan_ru_okuri, okuri_romaji, split_candidate, wa_gyou_okuri};
+use crate::jion::wiktionary::{
+    ichidan_ru_okuri, irregular_ii_reading, okuri_romaji, split_candidate, wa_gyou_okuri,
+};
 use crate::model::is_kanji;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,6 +42,8 @@ struct Reb {
     restr: Vec<String>,
     priority: bool,
     nokanji: bool,
+    /// `re_inf` の `&ok;` `&oik;` `&ik;`。古い仮名は連用の `k` を足さない。
+    obsolete_kana: bool,
 }
 
 struct Entry {
@@ -52,6 +56,10 @@ struct Entry {
     kuru: bool,
     /// `v5u` と `v5u-s`。えない・わない・おう。
     wa_gyou: bool,
+    /// `adj-i` と `adj-ix`。送りが「い」だけのとき、連用の `k` も出す。
+    i_adjective: bool,
+    /// `adj-ix`。読みが「いい」で終わる形は連用を出さない。
+    ii_class: bool,
     counters: Vec<CounterSense>,
 }
 
@@ -76,6 +84,7 @@ enum Slot {
     Pos,
     Stagk,
     Stagr,
+    ReInf,
 }
 
 /// Bare SKK lines from JMdict_e. Okuri verbs and i-adjectives use `okuri_romaji`.
@@ -113,6 +122,8 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                             ichidan: false,
                             kuru: false,
                             wa_gyou: false,
+                            i_adjective: false,
+                            ii_class: false,
                             counters: Vec::new(),
                         });
                         current_sense = None;
@@ -136,6 +147,7 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                             restr: Vec::new(),
                             priority: false,
                             nokanji: false,
+                            obsolete_kana: false,
                         });
                     }
                     "keb" => slot = Slot::Keb,
@@ -161,6 +173,7 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                             reb.nokanji = true;
                         }
                     }
+                    "re_inf" => slot = Slot::ReInf,
                     "pos" => slot = Slot::Pos,
                     "stagk" => slot = Slot::Stagk,
                     "stagr" => slot = Slot::Stagr,
@@ -202,6 +215,14 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                 if slot == Slot::Pos {
                     if let Some(name) = entity_name(&reference) {
                         note_pos(&mut entry, &mut current_sense, &name);
+                    }
+                } else if slot == Slot::ReInf {
+                    if let Some(name) = entity_name(&reference) {
+                        if matches!(name.as_str(), "ok" | "oik" | "ik") {
+                            if let Some(reb) = current_reb.as_mut() {
+                                reb.obsolete_kana = true;
+                            }
+                        }
                     }
                 } else if let Some(character) = reference.resolve_char_ref().ok().flatten() {
                     append_text(&mut text_buf, slot, &character.to_string());
@@ -250,6 +271,9 @@ pub fn parse(text: &str) -> Result<BTreeMap<String, Vec<String>>, ParseError> {
                     }
                     "stagr" => {
                         push_sense_limit(&mut current_sense, false, text_buf.trim());
+                        slot = Slot::None;
+                    }
+                    "re_inf" => {
                         slot = Slot::None;
                     }
                     "sense" => {
@@ -369,6 +393,13 @@ fn add_entry(entries: &mut BTreeMap<String, Vec<Candidate>>, entry: Entry) {
                             push(entries, extra, stem.clone(), priority);
                         }
                     }
+                    if entry.i_adjective && !reb.obsolete_kana {
+                        if let Some(ku) =
+                            i_adjective_ku_midashi(&keb.text, &reading, entry.ii_class)
+                        {
+                            push(entries, ku, stem.clone(), priority);
+                        }
+                    }
                     continue;
                 }
             }
@@ -436,6 +467,8 @@ fn note_pos(entry: &mut Option<Entry>, sense: &mut Option<SenseBuf>, name: &str)
         entry.ichidan |= name == "v1";
         entry.kuru |= name == "vk";
         entry.wa_gyou |= name == "v5u" || name == "v5u-s";
+        entry.i_adjective |= name == "adj-i" || name == "adj-ix";
+        entry.ii_class |= name == "adj-ix";
     }
     if name == "ctr" {
         if let Some(sense) = sense.as_mut() {
@@ -547,6 +580,27 @@ fn okuri_pair(keb: &str, reading: &str) -> Option<(String, String)> {
     let mut midashi = stem.to_string();
     midashi.push(romaji);
     Some((midashi, head.to_string()))
+}
+
+/// 終止の送りが「い」だけの形容詞は、連用「く」が別見出しになる。
+/// `太い` は `ふとi` と `ふとk`。`明るい` は送りが「る」なので `あかr` のまま。
+/// `adj-ix` の「いい」は「よい」側の連用にする。`いく` にはしない。
+fn i_adjective_ku_midashi(keb: &str, reading: &str, ii_class: bool) -> Option<String> {
+    let (head, tail) = split_candidate(keb);
+    if head.is_empty() {
+        return None;
+    }
+    let tail = katakana_to_hiragana(tail);
+    if tail != "い" || irregular_ii_reading(reading, head, ii_class) {
+        return None;
+    }
+    let stem = reading.strip_suffix('い')?;
+    if stem.is_empty() {
+        return None;
+    }
+    let mut midashi = stem.to_string();
+    midashi.push('k');
+    Some(midashi)
 }
 
 /// libskk は送り仮名が「っ」で始まるとき、次の仮名の子音で引く。
@@ -845,6 +899,71 @@ mod tests {
         assert!(line(&text, "おm").is_none());
         assert_eq!(line(&text, "のっかk"), Some("のっかk /乗っ掛/"));
         assert_eq!(line(&text, "わっか"), Some("わっか /輪っか/"));
+    }
+
+    #[test]
+    fn i_adjective_ku_is_a_separate_key() {
+        let text = format_entries(
+            &parse(
+                r#"<JMdict>
+<entry><k_ele><keb>太い</keb></k_ele><r_ele><reb>ふとい</reb></r_ele><sense><pos>adj-i</pos></sense></entry>
+<entry><k_ele><keb>明るい</keb></k_ele><k_ele><keb>明い</keb></k_ele><r_ele><reb>あかるい</reb></r_ele><sense><pos>adj-i</pos></sense></entry>
+<entry><k_ele><keb>書く</keb></k_ele><r_ele><reb>かく</reb></r_ele><sense><pos>v5k</pos></sense></entry>
+<entry><k_ele><keb>良い</keb></k_ele><r_ele><reb>いい</reb></r_ele><sense><pos>adj-ix</pos></sense></entry>
+</JMdict>"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(line(&text, "ふとi"), Some("ふとi /太/"));
+        assert_eq!(line(&text, "ふとk"), Some("ふとk /太/"));
+        assert_eq!(line(&text, "あかr"), Some("あかr /明/"));
+        assert_eq!(line(&text, "あかるi"), Some("あかるi /明/"));
+        assert_eq!(line(&text, "あかるk"), Some("あかるk /明/"));
+        assert_eq!(line(&text, "かk"), Some("かk /書/"));
+        assert!(line(&text, "いk").is_none());
+    }
+
+    #[test]
+    fn ii_class_conjugates_from_yoi_and_obsolete_kana_has_no_ku() {
+        let text = format_entries(
+            &parse(
+                r#"<JMdict>
+<entry>
+<k_ele><keb>気持ち良い</keb></k_ele>
+<k_ele><keb>気持ち好い</keb></k_ele>
+<r_ele><reb>きもちいい</reb></r_ele>
+<r_ele><reb>きもちよい</reb></r_ele>
+<sense><pos>adj-ix</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>可愛い</keb></k_ele>
+<r_ele><reb>かわいい</reb></r_ele>
+<sense><pos>adj-i</pos></sense>
+</entry>
+<entry>
+<k_ele><keb>良い</keb></k_ele>
+<k_ele><keb>好い</keb></k_ele>
+<r_ele><reb>よい</reb></r_ele>
+<r_ele><reb>えい</reb><re_inf>&ok;</re_inf></r_ele>
+<sense><pos>adj-i</pos></sense>
+</entry>
+</JMdict>"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            line(&text, "きもちよk"),
+            Some("きもちよk /気持ち良/気持ち好/")
+        );
+        assert_eq!(
+            line(&text, "きもちいi"),
+            Some("きもちいi /気持ち良/気持ち好/")
+        );
+        assert!(line(&text, "きもちいk").is_none());
+        assert_eq!(line(&text, "かわいk"), Some("かわいk /可愛/"));
+        assert_eq!(line(&text, "よk"), Some("よk /良/好/"));
+        assert_eq!(line(&text, "えi"), Some("えi /良/好/"));
+        assert!(line(&text, "えk").is_none());
     }
 
     #[test]
