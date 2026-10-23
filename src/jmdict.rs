@@ -543,10 +543,22 @@ fn okuri_pair(keb: &str, reading: &str) -> Option<(String, String)> {
     if stem.is_empty() {
         return None;
     }
-    let romaji = okuri_romaji(tail.chars().next()?)?;
+    let romaji = okuri_romaji(okuri_onset(&tail)?)?;
     let mut midashi = stem.to_string();
     midashi.push(romaji);
     Some((midashi, head.to_string()))
+}
+
+/// libskk は送り仮名が「っ」で始まるとき、次の仮名の子音で引く。
+/// `乗っかる` は `のk /乗/`。`noKkaru` で「乗」に「っかる」が付く。
+fn okuri_onset(tail: &str) -> Option<char> {
+    let mut chars = tail.chars();
+    let first = chars.next()?;
+    if first == 'っ' {
+        chars.next()
+    } else {
+        Some(first)
+    }
 }
 
 fn normalize_reading(raw: &str) -> Option<String> {
@@ -802,6 +814,37 @@ mod tests {
         assert!(line(&text, "とt").is_none());
         assert!(line(&text, "かe").is_none());
         assert!(line(&text, "きe").is_none());
+    }
+
+    #[test]
+    fn sokuon_okurigana_uses_the_next_consonant() {
+        let text = format_entries(
+            &parse(
+                r#"<JMdict>
+<entry><k_ele><keb>退く</keb></k_ele><r_ele><reb>のく</reb></r_ele><sense><pos>v5k</pos></sense></entry>
+<entry><k_ele><keb>乗る</keb></k_ele><r_ele><reb>のる</reb></r_ele><sense><pos>v5r</pos></sense></entry>
+<entry><k_ele><keb>乗っかる</keb></k_ele><k_ele><keb>載っかる</keb></k_ele><r_ele><reb>のっかる</reb></r_ele><sense><pos>v5r</pos></sense></entry>
+<entry><k_ele><keb>引っぱる</keb></k_ele><r_ele><reb>ひっぱる</reb></r_ele><sense><pos>v5r</pos></sense></entry>
+<entry><k_ele><keb>青っぽい</keb></k_ele><r_ele><reb>あおっぽい</reb></r_ele><sense><pos>adj-i</pos></sense></entry>
+<entry><k_ele><keb>追っかける</keb></k_ele><r_ele><reb>おっかける</reb></r_ele><sense><pos>v1</pos></sense></entry>
+<entry><k_ele><keb>乗っ掛かる</keb></k_ele><r_ele><reb>のっかかる</reb></r_ele><sense><pos>v5r</pos></sense></entry>
+<entry><k_ele><keb>輪っか</keb></k_ele><r_ele><reb>わっか</reb></r_ele><sense><pos>n</pos></sense></entry>
+</JMdict>"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(line(&text, "のk"), Some("のk /退/乗/載/"));
+        assert_eq!(line(&text, "のr"), Some("のr /乗/"));
+        assert!(line(&text, "のっかる").is_none());
+        assert!(line(&text, "のっかr").is_none());
+        assert_eq!(line(&text, "ひp"), Some("ひp /引/"));
+        assert!(line(&text, "ひっぱる").is_none());
+        assert_eq!(line(&text, "あおp"), Some("あおp /青/"));
+        assert!(line(&text, "あおっぽい").is_none());
+        assert_eq!(line(&text, "おk"), Some("おk /追/"));
+        assert!(line(&text, "おm").is_none());
+        assert_eq!(line(&text, "のっかk"), Some("のっかk /乗っ掛/"));
+        assert_eq!(line(&text, "わっか"), Some("わっか /輪っか/"));
     }
 
     #[test]

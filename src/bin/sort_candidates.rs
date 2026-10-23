@@ -88,7 +88,8 @@ fn sort_stream(
         let line = line?;
         if let Some(entry) = parse_line(&line) {
             let candidate_annotations = entry.candidate_annotations();
-            let sorted = sort_candidate_annotations(&candidate_annotations, frequencies);
+            let sorted =
+                sort_candidate_annotations(&entry.reading, &candidate_annotations, frequencies);
             writeln!(writer, "{} /{}/", entry.reading, sorted.join("/"))?;
         } else {
             writeln!(writer, "{line}")?;
@@ -150,7 +151,7 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(output).unwrap(),
-            "; header\nわらu /笑/咲/呵/粲/晒/咥/听/\nあん /安;アム/唵;アム/庵;アム/\n"
+            "; header\nわらu /粲/笑/晒/咲/咥/呵/听/\nあん /安;アム/唵;アム/庵;アム/\n"
         );
     }
 }

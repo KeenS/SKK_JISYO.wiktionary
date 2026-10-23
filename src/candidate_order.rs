@@ -53,10 +53,24 @@ fn link_target(link: &str) -> Option<&str> {
     Some(target)
 }
 
+/// Okuri-ari headings already follow the order written on the reading page.
+/// Link frequency of the bare kanji would move a rare spelling such as 関く
+/// ahead of 吐く, because 関 itself is linked often.
+fn okuri_consonant(reading: &str) -> Option<char> {
+    let consonant = reading.chars().next_back()?;
+    consonant
+        .is_ascii_alphabetic()
+        .then_some(consonant.to_ascii_lowercase())
+}
+
 pub fn sort_candidate_annotations(
+    reading: &str,
     candidate_annotations: &[String],
     frequencies: &LinkFrequency,
 ) -> Vec<String> {
+    if okuri_consonant(reading).is_some() {
+        return candidate_annotations.to_vec();
+    }
     let mut sorted = candidate_annotations.to_vec();
     sorted.sort_by(|left, right| {
         frequencies
@@ -89,7 +103,6 @@ fn candidate(candidate_annotation: &str) -> &str {
 mod tests {
     use super::*;
     use crate::model::Revision;
-    use std::collections::HashMap;
 
     fn page(text: &str) -> Page {
         Page {
@@ -138,7 +151,7 @@ mod tests {
         ];
 
         assert_eq!(
-            sort_candidate_annotations(&candidates, &frequencies),
+            sort_candidate_annotations("わらう", &candidates, &frequencies),
             vec![
                 "笑".to_string(),
                 "咲".to_string(),
@@ -152,10 +165,35 @@ mod tests {
     }
 
     #[test]
+    fn okuri_ari_keeps_the_order_written_on_the_page() {
+        let mut frequencies = LinkFrequency::new();
+        frequencies.insert("関".to_string(), 100);
+        frequencies.insert("着".to_string(), 80);
+        frequencies.insert("吐".to_string(), 3);
+
+        let candidates = vec![
+            "吐".to_string(),
+            "嘔".to_string(),
+            "掃".to_string(),
+            "刷".to_string(),
+            "履".to_string(),
+            "穿".to_string(),
+            "佩".to_string(),
+            "着".to_string(),
+            "関".to_string(),
+        ];
+
+        assert_eq!(
+            sort_candidate_annotations("はk", &candidates, &frequencies),
+            candidates
+        );
+    }
+
+    #[test]
     fn sort_keeps_single_candidate_unchanged() {
         let candidates = vec!["学校".to_string()];
         assert_eq!(
-            sort_candidate_annotations(&candidates, &HashMap::new()),
+            sort_candidate_annotations("がっこう", &candidates, &LinkFrequency::new()),
             candidates
         );
     }
