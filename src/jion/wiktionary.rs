@@ -748,10 +748,26 @@ pub fn parse_japanese_page(title: &str, text: &str) -> JapanesePage {
         }
     }
 
-    for body in template_bodies(text, "ja-verb")
-        .into_iter()
-        .chain(template_bodies_after(text, "ja-verb"))
-    {
+    for body in template_bodies(text, "ja-verb") {
+        for title in extract_bracket_titles(body) {
+            if !page.verb_titles.contains(&title) {
+                page.verb_titles.push(title);
+            }
+        }
+        // {{ja-verb|見る|視る|観る}} writes the kanji spellings as bare
+        // positional parameters. Kana-only parameters are readings and are
+        // handled from wagokanji_readings below.
+        for param in split_params(body) {
+            if param.contains('=') {
+                continue;
+            }
+            let title = clean_wikitext(param);
+            if title.contains(is_kanji) && !page.verb_titles.contains(&title) {
+                page.verb_titles.push(title);
+            }
+        }
+    }
+    for body in template_bodies_after(text, "ja-verb") {
         for title in extract_bracket_titles(body) {
             if !page.verb_titles.contains(&title) {
                 page.verb_titles.push(title);
@@ -1883,9 +1899,10 @@ pub(crate) fn wa_gyou_okuri(stem: &str) -> [String; 3] {
     })
 }
 
-/// 送り仮名が「る」だけの一段活用。語幹 `き` から `きm` `きt` `きn` `きy`。
-pub(crate) fn ichidan_ru_okuri(stem: &str) -> [String; 4] {
-    ['m', 't', 'n', 'y'].map(|consonant| {
+/// 送り仮名が「る」だけの一段活用。語幹 `き` から `きm` `きt` `きn` `きy` `きz`。
+/// `きz` は「きず」の見出しで、未然形に「ず」が付く形を引く。
+pub(crate) fn ichidan_ru_okuri(stem: &str) -> [String; 5] {
+    ['m', 't', 'n', 'y', 'z'].map(|consonant| {
         let mut reading = String::with_capacity(stem.len() + consonant.len_utf8());
         reading.push_str(stem);
         reading.push(consonant);
@@ -3293,7 +3310,7 @@ mod tests {
             vec!["着る".to_string(), "著る".to_string()]
         );
         let entries = entry_strings(&wiktionary_entries(&page));
-        for key in ["きm", "きt", "きn", "きy", "きr"] {
+        for key in ["きm", "きt", "きn", "きy", "きz", "きr"] {
             assert!(
                 entries.contains(&format!("{key} /着/")),
                 "{key}: {entries:?}"
@@ -3310,6 +3327,21 @@ mod tests {
                 && !entry.starts_with("きn /切/")
                 && !entry.starts_with("きy /切/")
         }));
+    }
+
+    #[test]
+    fn generates_zu_okuri_for_ichidan_ru() {
+        let page = parse_japanese_page(
+            "みる",
+            "==={{verb}}===\n{{ja-verb|見る|視る|観る|看る|診る}}\n#【[[見]]る・[[視]]る】\n{{ja-accent-common|h|み|る}}\n===={{conjug}}====\n{{日本語上一段活用}}",
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        for key in ["みm", "みt", "みn", "みy", "みz", "みr"] {
+            assert!(
+                entries.contains(&format!("{key} /見/")),
+                "{key}: {entries:?}"
+            );
+        }
     }
 
     #[test]

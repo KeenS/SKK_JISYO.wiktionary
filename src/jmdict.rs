@@ -813,6 +813,7 @@ mod tests {
                 r#"<JMdict>
 <entry><k_ele><keb>食べる</keb></k_ele><r_ele><reb>たべる</reb></r_ele><sense><pos>v1</pos></sense></entry>
 <entry><k_ele><keb>着る</keb></k_ele><r_ele><reb>きる</reb></r_ele><sense><pos>v1</pos><pos>vt</pos></sense></entry>
+<entry><k_ele><keb>見る</keb></k_ele><r_ele><reb>みる</reb></r_ele><sense><pos>v1</pos></sense></entry>
 <entry><k_ele><keb>切る</keb></k_ele><r_ele><reb>きる</reb></r_ele><sense><pos>v5r</pos></sense></entry>
 <entry><k_ele><keb>来る</keb></k_ele><k_ele><keb>來る</keb></k_ele><r_ele><reb>くる</reb></r_ele><sense><pos>vk</pos></sense></entry>
 <entry><k_ele><keb>出来る</keb></k_ele><r_ele><reb>できる</reb></r_ele><sense><pos>v1</pos></sense></entry>
@@ -828,6 +829,9 @@ mod tests {
         assert_eq!(line(&text, "きt"), Some("きt /着/来/來/"));
         assert_eq!(line(&text, "きn"), Some("きn /着/"));
         assert_eq!(line(&text, "きy"), Some("きy /着/"));
+        // 一段の未然形に「ず」が付く形。みず / 見ず、きず / 着ず。
+        assert_eq!(line(&text, "きz"), Some("きz /着/"));
+        assert_eq!(line(&text, "みz"), Some("みz /見/"));
         assert!(!line(&text, "きm").unwrap().contains("切"));
         assert_eq!(line(&text, "くr"), Some("くr /来/來/"));
         assert_eq!(line(&text, "こn"), Some("こn /来/來/"));
@@ -838,6 +842,7 @@ mod tests {
         assert_eq!(line(&text, "できm"), Some("できm /出来/"));
         assert_eq!(line(&text, "できt"), Some("できt /出来/"));
         assert_eq!(line(&text, "できr"), Some("できr /出来/"));
+        assert_eq!(line(&text, "できz"), Some("できz /出来/"));
         assert_eq!(line(&text, "やってきm"), Some("やってきm /やって来/"));
         assert_eq!(line(&text, "やってきt"), Some("やってきt /やって来/"));
         assert_eq!(line(&text, "やってこn"), Some("やってこn /やって来/"));
