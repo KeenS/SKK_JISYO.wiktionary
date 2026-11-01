@@ -1074,6 +1074,8 @@ fn extract_bracket_titles(body: &str) -> Vec<String> {
         for candidate in value.split(['、', '・', ',', '，']) {
             let candidate = candidate.trim_matches(['（', '）', ' ']);
             let candidate = clean_wikitext(candidate);
+            // 【＋曳く】の＋は、その語義だけの追加表記を示す印。語には含めない。
+            let candidate = candidate.trim_start_matches('＋').to_string();
             if !candidate.is_empty() && !titles.contains(&candidate) {
                 titles.push(candidate);
             }
@@ -2859,6 +2861,38 @@ mod tests {
             page.verb_titles,
             vec!["混ぜる".to_string(), "交ぜる".to_string()]
         );
+    }
+
+    #[test]
+    fn strips_additional_spelling_mark_from_sense_brackets() {
+        let page = parse_japanese_page(
+            "ひく",
+            "{{ja-accent-common|h||ひく}}\n\
+             {{ja-verb}}【[[引]]く】\n\
+             #【＋[[曳]]く、[[牽]]く、[[挽]]く】\n\
+             #【＋[[退]]く】\n\
+             #【＋[[惹]]く】\n\
+             #【[[弾]]く】\n\
+             {{日本語五段活用}}\n",
+        );
+        assert_eq!(
+            page.verb_titles,
+            vec![
+                "引く".to_string(),
+                "曳く".to_string(),
+                "牽く".to_string(),
+                "挽く".to_string(),
+                "退く".to_string(),
+                "惹く".to_string(),
+                "弾く".to_string(),
+            ]
+        );
+        let entries = entry_strings(&wiktionary_entries(&page));
+        assert!(entries.iter().all(|entry| !entry.contains('＋')));
+        assert!(entries.contains(&"ひk /曳/".to_string()));
+        assert!(entries.contains(&"ひi /曳/".to_string()));
+        assert!(entries.contains(&"ひk /退/".to_string()));
+        assert!(entries.contains(&"ひk /惹/".to_string()));
     }
 
     #[test]
